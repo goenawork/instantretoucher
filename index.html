@@ -17,7 +17,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#140a02
 button:focus-visible,input:focus-visible,label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 main{flex:1;display:flex;min-height:0}
 #stage{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;position:relative}
-#cv{max-width:100%;max-height:100%;box-shadow:0 0 0 1px var(--line);display:none}
+#cv,#out{max-width:100%;max-height:100%;box-shadow:0 0 0 1px var(--line);display:none}
 #empty{text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:10px;padding:48px 32px;max-width:340px}
 #stage.drag #empty{border-color:var(--accent);color:var(--text)}
 aside{width:300px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:6px 16px 20px}
@@ -27,6 +27,7 @@ h2{font-size:13px;font-weight:600;margin:18px 0 6px;color:var(--mute)}
 .row output{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
 .row input{grid-column:1/3;width:100%;accent-color:var(--accent)}
 #msg{font-size:12px;color:var(--mute);padding:8px 14px;border-top:1px solid var(--line)}
+[hidden]{display:none!important}.field{display:flex;gap:8px;align-items:center;margin:8px 0}.field select,.field input[type=color]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}.field input[type=color]{padding:0;width:40px;height:30px}
 @media(max-width:760px){main{flex-direction:column}aside{width:100%;border-left:0;border-top:1px solid var(--line);max-height:45%}}
 </style>
 </head>
@@ -36,12 +37,13 @@ h2{font-size:13px;font-weight:600;margin:18px 0 6px;color:var(--mute)}
   <label class="btn">Buka foto<input id="file" type="file" accept="image/*" hidden></label>
   <button id="cmp" disabled>Tahan untuk lihat asli</button>
   <button id="reset" disabled>Reset</button>
-  <button id="save" class="primary" disabled>Simpan JPG</button>
+  <button id="save" class="primary" disabled>Simpan</button>
 </header>
 <main>
   <div id="stage">
     <div id="empty">Tarik foto ke sini atau klik Buka foto.<br>Foto diproses di browser dan tidak diunggah ke mana pun.</div>
     <canvas id="cv"></canvas>
+    <canvas id="out"></canvas>
   </div>
   <aside id="panel"></aside>
 </main>
@@ -112,6 +114,7 @@ function draw(){
   gl.viewport(0,0,cv.width,cv.height);
   for(const k in U) gl.uniform1f(U[k], bypass ? 0 : state[k]);
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  composite();
 }
 
 function loadImage(file){
@@ -126,7 +129,7 @@ function loadImage(file){
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
     [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
     [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
-    loaded = true; cv.style.display = "block"; document.getElementById("empty").style.display = "none";
+    loaded = true; mask = null; curFile = file; rmbg.disabled = false; bgopts.hidden = true; cv.style.display = "block"; document.getElementById("empty").style.display = "none";
     ["cmp","reset","save"].forEach(i=>document.getElementById(i).disabled=false);
     msg(`${file.name}, ${cv.width}×${cv.height}px. Klik dua kali slider untuk mengembalikan ke 0.`);
     draw(); URL.revokeObjectURL(img.src);
@@ -151,7 +154,78 @@ document.getElementById("reset").addEventListener("click", () => {
 });
 document.getElementById("save").addEventListener("click", () => {
   bypass = false; draw();
-  cv.toBlob(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "hasil-koreksi.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); msg("Foto tersimpan."); }, "image/jpeg", 0.95);
+  const png = mask && bgmode.value === "transparent";
+  (mask ? out : cv).toBlob(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = png ? "hasil.png" : "hasil.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); msg(png ? "Tersimpan sebagai PNG transparan." : "Foto tersimpan."); }, png ? "image/png" : "image/jpeg", 0.95);
+});
+
+/* ---------- Background ---------- */
+let curFile = null, mask = null, bgImg = null, seg = null;
+panel.insertAdjacentHTML("beforeend", `
+  <h2>Background</h2>
+  <button id="rmbg" style="width:100%" disabled>Pisahkan subjek (AI)</button>
+  <div id="bgopts" hidden>
+    <div class="field"><select id="bgmode" aria-label="Jenis latar">
+      <option value="transparent">Transparan</option><option value="color">Warna</option>
+      <option value="image">Gambar</option><option value="original">Latar asli</option></select>
+      <input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
+      <label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
+    <div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
+      <input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
+  </div>`);
+const out = document.getElementById("out");
+["bgmode","bgcolor","feather"].forEach(id => document.getElementById(id).addEventListener("input", () => {
+  document.getElementById("o_f").textContent = feather.value; draw(); }));
+bgimg.addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const im = new Image(); im.onload = () => { bgImg = im; bgmode.value = "image"; draw(); };
+  im.src = URL.createObjectURL(f);
+});
+
+function composite(){
+  if(!mask){ out.style.display = "none"; cv.style.display = "block"; return; }
+  const W = out.width = cv.width, H = out.height = cv.height, o = out.getContext("2d"), mode = bgmode.value;
+  o.clearRect(0,0,W,H);
+  out.style.background = mode === "transparent" ? "repeating-conic-gradient(#2a2a2a 0 25%,#1c1c1c 0 50%) 0 0/20px 20px" : "none";
+  if(mode === "original") o.drawImage(cv,0,0);
+  else {
+    if(mode === "color"){ o.fillStyle = bgcolor.value; o.fillRect(0,0,W,H); }
+    else if(mode === "image" && bgImg){
+      const k = Math.max(W/bgImg.width, H/bgImg.height), w = bgImg.width*k, h = bgImg.height*k;
+      o.drawImage(bgImg,(W-w)/2,(H-h)/2,w,h);
+    }
+    const t = document.createElement("canvas"); t.width = W; t.height = H;
+    const c = t.getContext("2d"); c.drawImage(cv,0,0);
+    c.globalCompositeOperation = "destination-in"; c.filter = `blur(${feather.value}px)`; c.drawImage(mask,0,0);
+    o.drawImage(t,0,0);
+  }
+  cv.style.display = "none"; out.style.display = "block";
+}
+
+rmbg.addEventListener("click", async () => {
+  rmbg.disabled = true;
+  try {
+    if(!seg){
+      msg("Memuat model AI. Pertama kali butuh unduhan puluhan MB, setelah itu tersimpan di browser.");
+      const T = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2");
+      T.env.allowLocalModels = false;
+      seg = { T, model: await T.AutoModel.from_pretrained("Xenova/modnet", {dtype:"fp32"}),
+              proc: await T.AutoProcessor.from_pretrained("Xenova/modnet") };
+    }
+    msg("Memisahkan subjek...");
+    const img = await seg.T.RawImage.fromBlob(curFile);
+    const { pixel_values } = await seg.proc(img);
+    const { output } = await seg.model({ input: pixel_values });
+    const m = await seg.T.RawImage.fromTensor(output[0].mul(255).to("uint8")).resize(cv.width, cv.height);
+    const mc = document.createElement("canvas"); mc.width = cv.width; mc.height = cv.height;
+    const ctx = mc.getContext("2d"), id = ctx.createImageData(mc.width, mc.height);
+    for(let i = 0; i < mc.width*mc.height; i++) id.data[i*4+3] = m.data[i*m.channels];
+    ctx.putImageData(id,0,0); mask = mc;
+    bgopts.hidden = false; draw();
+    msg("Subjek terpisah. Pilih jenis latar di panel Background.");
+  } catch(e) {
+    msg("Gagal memisahkan subjek: " + e.message + ". Cek koneksi internet lalu coba lagi.");
+  }
+  rmbg.disabled = false;
 });
 </script>
 </body>
