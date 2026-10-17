@@ -12,74 +12,98 @@ body{background:var(--bg);color:var(--text);font:14px/1.4 "Segoe UI",system-ui,s
 header{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
 header h1{font-size:16px;font-weight:700;letter-spacing:.2px;margin:0 auto 0 0}
 button,label.btn{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;cursor:pointer}
-button:hover,label.btn:hover{border-color:var(--accent)}
+button:hover:not(:disabled),label.btn:hover{border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:default}
 button.primary{background:var(--accent);border-color:var(--accent);color:#140a02;font-weight:700}
-button:focus-visible,input:focus-visible,label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,label.btn:focus-within,.th:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 main{flex:1;display:flex;min-height:0}
-#stage{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;position:relative}
-#cv,#out{max-width:100%;max-height:100%;box-shadow:0 0 0 1px var(--line);display:none}
-#empty{text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:10px;padding:48px 32px;max-width:340px}
+#stage{flex:1;display:flex;flex-direction:column;padding:12px;min-width:0}
+#view{flex:1;min-height:0;position:relative}
+#cv,#out{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;box-shadow:0 0 0 1px var(--line);display:none}
+#empty{position:absolute;inset:0;margin:auto;height:max-content;text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:10px;padding:40px 28px;max-width:360px}
 #stage.drag #empty{border-color:var(--accent);color:var(--text)}
+#strip{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 2px}
+.th{position:relative;flex:0 0 auto;width:84px;height:64px;border:2px solid transparent;border-radius:6px;overflow:hidden;cursor:pointer;background:#000}
+.th.sel{border-color:var(--accent)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th input{position:absolute;top:3px;left:3px;accent-color:var(--accent)}
 aside{width:300px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:6px 16px 20px}
 h2{font-size:13px;font-weight:600;margin:18px 0 6px;color:var(--mute)}
 .row{display:grid;grid-template-columns:1fr 44px;gap:2px 8px;align-items:center;margin:8px 0}
-.row span{grid-column:1}
 .row output{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
 .row input{grid-column:1/3;width:100%;accent-color:var(--accent)}
 #msg{font-size:12px;color:var(--mute);padding:8px 14px;border-top:1px solid var(--line)}
-[hidden]{display:none!important}.field{display:flex;gap:8px;align-items:center;margin:8px 0}.field select,.field input[type=color]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}.field input[type=color]{padding:0;width:40px;height:30px}
+[hidden]{display:none!important}
+.field{display:flex;gap:8px;align-items:center;margin:8px 0}
+.field select,.field input[type=color]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit}
+.field input[type=color]{padding:0;width:40px;height:30px}
+aside button.w{width:100%;margin-top:6px}
 @media(max-width:760px){main{flex-direction:column}aside{width:100%;border-left:0;border-top:1px solid var(--line);max-height:45%}}
 </style>
 </head>
 <body>
 <header>
   <h1>Instant<span style="color:var(--accent)">Retoucher</span></h1>
-  <label class="btn">Buka foto<input id="file" type="file" accept="image/*" hidden></label>
+  <label class="btn">Buka foto<input id="file" type="file" multiple hidden accept="image/*,.cr2,.cr3,.crw,.raf,.nef,.nrw,.arw,.sr2,.srf,.dng,.orf,.rw2,.pef,.srw,.3fr,.erf,.mrw,.kdc,.dcr,.raw"></label>
+  <button id="rot" disabled>Putar</button>
   <button id="cmp" disabled>Tahan untuk lihat asli</button>
   <button id="reset" disabled>Reset</button>
-  <button id="save" class="primary" disabled>Simpan</button>
+  <button id="save" disabled>Simpan foto ini</button>
+  <button id="zip" class="primary" disabled>Ekspor ZIP</button>
 </header>
 <main>
   <div id="stage">
-    <div id="empty">Tarik foto ke sini atau klik Buka foto.<br>Foto diproses di browser dan tidak diunggah ke mana pun.</div>
-    <canvas id="cv"></canvas>
-    <canvas id="out"></canvas>
+    <div id="view">
+      <div id="empty">Tarik foto ke sini atau klik Buka foto.<br>Bisa banyak sekaligus: JPG, PNG, WebP, dan RAW (CR2, CR3, RAF, NEF, ARW, DNG, dll).<br>Semua diproses di browser, tidak ada yang diunggah.</div>
+      <canvas id="cv"></canvas><canvas id="out"></canvas>
+    </div>
+    <div id="strip"></div>
   </div>
   <aside id="panel"></aside>
 </main>
 <div id="msg">Siap.</div>
 
 <script>
-const CONTROLS = [
-  ["Cahaya", [
-    ["exposure","Exposure",-3,3,0.01],["contrast","Contrast",-1,1,0.01],
-    ["highlights","Highlights",-1,1,0.01],["shadows","Shadows",-1,1,0.01]]],
-  ["Warna", [
-    ["temp","Temperature",-1,1,0.01],["tint","Tint",-1,1,0.01],
-    ["vibrance","Vibrance",-1,1,0.01],["sat","Saturation",-1,1,0.01]]]
-];
-const state = {};
-const panel = document.getElementById("panel");
-CONTROLS.forEach(([title, items]) => {
-  const h = document.createElement("h2"); h.textContent = title; panel.appendChild(h);
-  items.forEach(([id,label,min,max,step]) => {
-    state[id] = 0;
-    const r = document.createElement("div"); r.className = "row";
-    r.innerHTML = `<span>${label}</span><output id="o_${id}">0</output><input id="s_${id}" type="range" min="${min}" max="${max}" step="${step}" value="0" aria-label="${label}">`;
-    panel.appendChild(r);
-    const s = r.querySelector("input");
-    s.addEventListener("input", () => { state[id] = +s.value; r.querySelector("output").textContent = (+s.value).toFixed(2); draw(); });
-    s.addEventListener("dblclick", () => { s.value = 0; s.dispatchEvent(new Event("input")); });
+const GROUPS=[["Cahaya",[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1]]],
+ ["Warna",[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]]];
+const IDS=GROUPS.flatMap(g=>g[1].map(r=>r[0]));
+const zero=()=>Object.fromEntries(IDS.map(k=>[k,0]));
+const $=id=>document.getElementById(id), msg=t=>$("msg").textContent=t;
+const RAW=/\.(cr2|cr3|crw|raf|nef|nrw|arw|srf|sr2|dng|orf|rw2|pef|srw|3fr|erf|mrw|kdc|dcr|raw)$/i;
+const photos=[], wc=document.createElement("canvas"), cv=$("cv"), out=$("out"), panel=$("panel");
+let cur=null, idx=-1, bypass=false, busy=false, tex=null, seg=null, tok=0;
+
+/* ---------- Panel ---------- */
+GROUPS.forEach(([title,items])=>{
+  panel.insertAdjacentHTML("beforeend",`<h2>${title}</h2>`);
+  items.forEach(([id,label,min,max])=>{
+    panel.insertAdjacentHTML("beforeend",`<div class="row"><span>${label}</span><output id="o_${id}">0.00</output><input id="s_${id}" type="range" min="${min}" max="${max}" step="0.01" value="0" aria-label="${label}"></div>`);
+    const s=$("s_"+id);
+    s.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+s.value;$("o_"+id).textContent=(+s.value).toFixed(2);draw();});
+    s.addEventListener("dblclick",()=>{s.value=0;s.dispatchEvent(new Event("input"));});
   });
 });
+panel.insertAdjacentHTML("beforeend",`
+  <h2>Batch</h2>
+  <button id="syncb" class="w" disabled>Terapkan ke foto tercentang</button>
+  <button id="chk" class="w" disabled>Centang semua / kosongkan</button>
+  <h2>Background</h2>
+  <button id="rmbg" class="w" disabled>Pisahkan subjek (AI)</button>
+  <button id="rmall" class="w" disabled>Pisahkan semua yang tercentang</button>
+  <div id="bgopts" hidden>
+    <div class="field"><select id="bgmode" aria-label="Jenis latar">
+      <option value="transparent">Transparan</option><option value="color">Warna</option>
+      <option value="image">Gambar</option><option value="original">Latar asli</option></select>
+      <input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
+      <label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
+    <div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
+      <input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
+  </div>`);
 
-const cv = document.getElementById("cv");
-const gl = cv.getContext("webgl", {preserveDrawingBuffer:true, premultipliedAlpha:false});
-const msg = t => document.getElementById("msg").textContent = t;
-let loaded = false, bypass = false;
-
-const VS = `attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
-const FS = `precision highp float;varying vec2 v;uniform sampler2D t;
+/* ---------- WebGL ---------- */
+const gl=cv.getContext("webgl",{preserveDrawingBuffer:true,premultipliedAlpha:false});
+const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
+const FS=`precision highp float;varying vec2 v;uniform sampler2D t;
 uniform float exposure,contrast,highlights,shadows,temp,tint,vibrance,sat;
 void main(){
   vec3 c=texture2D(t,v).rgb;
@@ -91,141 +115,228 @@ void main(){
   c=(c-.5)*(1.+contrast)+.5;
   l=dot(c,vec3(.2126,.7152,.0722));
   float mx=max(c.r,max(c.g,c.b)), mn=min(c.r,min(c.g,c.b));
-  float vb=vibrance*(1.-(mx-mn));
-  c=mix(vec3(l),c,1.+sat+vb);
+  c=mix(vec3(l),c,1.+sat+vibrance*(1.-(mx-mn)));
   gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
-function sh(type, src){ const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
-  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
-let prog, U = {};
-if (!gl) { msg("Browser tidak mendukung WebGL."); }
-else {
-  prog = gl.createProgram();
-  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
-  gl.linkProgram(prog); gl.useProgram(prog);
-  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog,"p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-  Object.keys(state).forEach(k => U[k] = gl.getUniformLocation(prog,k));
+const U={}; let MAXT=4096;
+if(!gl) msg("Browser tidak mendukung WebGL.");
+else{
+  const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
+  const pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(pr); gl.useProgram(pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(pr,"p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  IDS.forEach(k=>U[k]=gl.getUniformLocation(pr,k)); MAXT=gl.getParameter(gl.MAX_TEXTURE_SIZE);
 }
 
-function draw(){
-  if(!loaded) return;
+function draw(p=cur){
+  if(!p||!tex)return;
   gl.viewport(0,0,cv.width,cv.height);
-  for(const k in U) gl.uniform1f(U[k], bypass ? 0 : state[k]);
-  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-  composite();
+  const off=bypass&&p===cur;
+  IDS.forEach(k=>gl.uniform1f(U[k],off?0:p.s[k]));
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4); composite(p);
 }
 
-function loadImage(file){
-  if(!file || !file.type.startsWith("image/")) { msg("File harus berupa gambar (JPG, PNG, WebP)."); return; }
-  const img = new Image();
-  img.onload = () => {
-    const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-    const k = Math.min(1, max/Math.max(img.width,img.height));
-    cv.width = Math.round(img.width*k); cv.height = Math.round(img.height*k);
-    const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
-    [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
-    [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
-    loaded = true; mask = null; curFile = file; rmbg.disabled = false; bgopts.hidden = true; cv.style.display = "block"; document.getElementById("empty").style.display = "none";
-    ["cmp","reset","save"].forEach(i=>document.getElementById(i).disabled=false);
-    msg(`${file.name}, ${cv.width}×${cv.height}px. Klik dua kali slider untuk mengembalikan ke 0.`);
-    draw(); URL.revokeObjectURL(img.src);
-  };
-  img.onerror = () => msg("Foto tidak bisa dibuka. Coba format JPG atau PNG.");
-  img.src = URL.createObjectURL(file);
+async function show(p,cap,tk){
+  const bm=await createImageBitmap(p.blob,{imageOrientation:"from-image"});
+  if(tk!==undefined&&tk!==tok){bm.close();return;}
+  const odd=p.rot%2, sw=odd?bm.height:bm.width, sh=odd?bm.width:bm.height;
+  const k=Math.min(1,Math.min(cap,MAXT)/Math.max(sw,sh));
+  wc.width=Math.round(sw*k); wc.height=Math.round(sh*k);
+  const c=wc.getContext("2d"); c.translate(wc.width/2,wc.height/2); c.rotate(p.rot*Math.PI/2);
+  c.drawImage(bm,-bm.width*k/2,-bm.height*k/2,bm.width*k,bm.height*k); bm.close();
+  cv.width=wc.width; cv.height=wc.height;
+  if(tex)gl.deleteTexture(tex); tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,wc);
+  [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+  [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
+  draw(p);
 }
 
-document.getElementById("file").addEventListener("change", e => loadImage(e.target.files[0]));
-const stage = document.getElementById("stage");
-stage.addEventListener("dragover", e => { e.preventDefault(); stage.classList.add("drag"); });
-stage.addEventListener("dragleave", () => stage.classList.remove("drag"));
-stage.addEventListener("drop", e => { e.preventDefault(); stage.classList.remove("drag"); loadImage(e.dataTransfer.files[0]); });
-
-const cmp = document.getElementById("cmp");
-const hold = v => () => { bypass = v; draw(); };
-["pointerdown"].forEach(ev => cmp.addEventListener(ev, hold(true)));
-["pointerup","pointerleave","pointercancel"].forEach(ev => cmp.addEventListener(ev, hold(false)));
-
-document.getElementById("reset").addEventListener("click", () => {
-  document.querySelectorAll("#panel input").forEach(s => { s.value = 0; s.dispatchEvent(new Event("input")); });
-});
-document.getElementById("save").addEventListener("click", () => {
-  bypass = false; draw();
-  const png = mask && bgmode.value === "transparent";
-  (mask ? out : cv).toBlob(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = png ? "hasil.png" : "hasil.jpg"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); msg(png ? "Tersimpan sebagai PNG transparan." : "Foto tersimpan."); }, png ? "image/png" : "image/jpeg", 0.95);
-});
-
-/* ---------- Background ---------- */
-let curFile = null, mask = null, bgImg = null, seg = null;
-panel.insertAdjacentHTML("beforeend", `
-  <h2>Background</h2>
-  <button id="rmbg" style="width:100%" disabled>Pisahkan subjek (AI)</button>
-  <div id="bgopts" hidden>
-    <div class="field"><select id="bgmode" aria-label="Jenis latar">
-      <option value="transparent">Transparan</option><option value="color">Warna</option>
-      <option value="image">Gambar</option><option value="original">Latar asli</option></select>
-      <input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
-      <label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
-    <div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
-      <input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
-  </div>`);
-const out = document.getElementById("out");
-["bgmode","bgcolor","feather"].forEach(id => document.getElementById(id).addEventListener("input", () => {
-  document.getElementById("o_f").textContent = feather.value; draw(); }));
-bgimg.addEventListener("change", e => {
-  const f = e.target.files[0]; if(!f) return;
-  const im = new Image(); im.onload = () => { bgImg = im; bgmode.value = "image"; draw(); };
-  im.src = URL.createObjectURL(f);
-});
-
-function composite(){
-  if(!mask){ out.style.display = "none"; cv.style.display = "block"; return; }
-  const W = out.width = cv.width, H = out.height = cv.height, o = out.getContext("2d"), mode = bgmode.value;
+/* ---------- Background compositing ---------- */
+let bgImg=null;
+function composite(p){
+  if(!p.mask){out.style.display="none";cv.style.display="block";return;}
+  const W=out.width=cv.width,H=out.height=cv.height,o=out.getContext("2d"),mode=$("bgmode").value;
   o.clearRect(0,0,W,H);
-  out.style.background = mode === "transparent" ? "repeating-conic-gradient(#2a2a2a 0 25%,#1c1c1c 0 50%) 0 0/20px 20px" : "none";
-  if(mode === "original") o.drawImage(cv,0,0);
-  else {
-    if(mode === "color"){ o.fillStyle = bgcolor.value; o.fillRect(0,0,W,H); }
-    else if(mode === "image" && bgImg){
-      const k = Math.max(W/bgImg.width, H/bgImg.height), w = bgImg.width*k, h = bgImg.height*k;
-      o.drawImage(bgImg,(W-w)/2,(H-h)/2,w,h);
-    }
-    const t = document.createElement("canvas"); t.width = W; t.height = H;
-    const c = t.getContext("2d"); c.drawImage(cv,0,0);
-    c.globalCompositeOperation = "destination-in"; c.filter = `blur(${feather.value}px)`; c.drawImage(mask,0,0);
+  out.style.background=mode==="transparent"?"repeating-conic-gradient(#2a2a2a 0 25%,#1c1c1c 0 50%) 0 0/20px 20px":"none";
+  if(mode==="original")o.drawImage(cv,0,0);
+  else{
+    if(mode==="color"){o.fillStyle=$("bgcolor").value;o.fillRect(0,0,W,H);}
+    else if(mode==="image"&&bgImg){const k=Math.max(W/bgImg.width,H/bgImg.height),w=bgImg.width*k,h=bgImg.height*k;o.drawImage(bgImg,(W-w)/2,(H-h)/2,w,h);}
+    const t=document.createElement("canvas");t.width=W;t.height=H;
+    const c=t.getContext("2d");c.drawImage(cv,0,0);
+    c.globalCompositeOperation="destination-in";c.filter=`blur(${$("feather").value}px)`;c.drawImage(p.mask,0,0,W,H);
     o.drawImage(t,0,0);
   }
-  cv.style.display = "none"; out.style.display = "block";
+  cv.style.display="none";out.style.display="block";
 }
+["bgmode","bgcolor","feather"].forEach(id=>$(id).addEventListener("input",()=>{$("o_f").textContent=$("feather").value;draw();}));
+$("bgimg").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{bgImg=im;$("bgmode").value="image";draw();};im.src=URL.createObjectURL(f);});
 
-rmbg.addEventListener("click", async () => {
-  rmbg.disabled = true;
-  try {
+async function segment(p){
+  try{
     if(!seg){
       msg("Memuat model AI. Pertama kali butuh unduhan puluhan MB, setelah itu tersimpan di browser.");
-      const T = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2");
-      T.env.allowLocalModels = false;
-      seg = { T, model: await T.AutoModel.from_pretrained("Xenova/modnet", {dtype:"fp32"}),
-              proc: await T.AutoProcessor.from_pretrained("Xenova/modnet") };
+      const T=await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2");
+      T.env.allowLocalModels=false;
+      seg={T,model:await T.AutoModel.from_pretrained("Xenova/modnet",{dtype:"fp32"}),proc:await T.AutoProcessor.from_pretrained("Xenova/modnet")};
     }
-    msg("Memisahkan subjek...");
-    const img = await seg.T.RawImage.fromBlob(curFile);
-    const { pixel_values } = await seg.proc(img);
-    const { output } = await seg.model({ input: pixel_values });
-    const m = await seg.T.RawImage.fromTensor(output[0].mul(255).to("uint8")).resize(cv.width, cv.height);
-    const mc = document.createElement("canvas"); mc.width = cv.width; mc.height = cv.height;
-    const ctx = mc.getContext("2d"), id = ctx.createImageData(mc.width, mc.height);
-    for(let i = 0; i < mc.width*mc.height; i++) id.data[i*4+3] = m.data[i*m.channels];
-    ctx.putImageData(id,0,0); mask = mc;
-    bgopts.hidden = false; draw();
-    msg("Subjek terpisah. Pilih jenis latar di panel Background.");
-  } catch(e) {
-    msg("Gagal memisahkan subjek: " + e.message + ". Cek koneksi internet lalu coba lagi.");
+    const img=seg.T.RawImage.fromCanvas(wc);
+    const {pixel_values}=await seg.proc(img);
+    const {output}=await seg.model({input:pixel_values});
+    const m=await seg.T.RawImage.fromTensor(output[0].mul(255).to("uint8")).resize(wc.width,wc.height);
+    const mc=document.createElement("canvas");mc.width=wc.width;mc.height=wc.height;
+    const ctx=mc.getContext("2d"),id=ctx.createImageData(mc.width,mc.height);
+    for(let i=0;i<mc.width*mc.height;i++)id.data[i*4+3]=m.data[i*m.channels];
+    ctx.putImageData(id,0,0);p.mask=mc;$("bgopts").hidden=false;draw(p);return true;
+  }catch(e){msg("Gagal memisahkan subjek: "+e.message+". Cek koneksi internet lalu coba lagi.");return false;}
+}
+$("rmbg").onclick=async()=>{if(!cur||busy)return;busy=true;msg("Memisahkan subjek...");if(await segment(cur))msg("Subjek terpisah. Pilih jenis latar di panel Background.");busy=false;};
+$("rmall").onclick=async()=>{
+  if(busy)return;const keep=idx,L=photos.map((p,i)=>i).filter(i=>photos[i].on);
+  for(let n=0;n<L.length;n++){await select(L[n]);busy=true;msg(`Memisahkan subjek ${n+1}/${L.length}...`);const ok=await segment(photos[L[n]]);busy=false;if(!ok)return;}
+  await select(keep);msg(`Subjek terpisah di ${L.length} foto.`);
+};
+
+/* ---------- RAW: ambil JPEG preview terbesar di dalam file ---------- */
+function jpegEnd(b,s){
+  let p=s+2;const n=b.length;
+  while(p+4<n){
+    if(b[p]!==0xFF)return -1;
+    const m=b[p+1];
+    if(m===0xFF){p++;continue;}
+    if(m===0xD9)return p+2;
+    if(m===0x01||(m>=0xD0&&m<=0xD8)){p+=2;continue;}
+    p+=2+((b[p+2]<<8)|b[p+3]);
+    if(m===0xDA){
+      while(p+1<n){
+        if(b[p]===0xFF){const q=b[p+1];if(q===0xD9)return p+2;if(q!==0&&q!==0xFF&&!(q>=0xD0&&q<=0xD7))break;}
+        p++;
+      }
+    }
   }
-  rmbg.disabled = false;
+  return -1;
+}
+function extractJpeg(b){
+  let best=null;
+  for(let i=0;i<b.length-3;i++){
+    if(b[i]===0xFF&&b[i+1]===0xD8&&b[i+2]===0xFF){
+      const e=jpegEnd(b,i);
+      if(e>0){if(!best||e-i>best[1]-best[0])best=[i,e];i=e-1;}
+    }
+  }
+  return best&&best[1]-best[0]>20000?new Blob([b.subarray(best[0],best[1])],{type:"image/jpeg"}):null;
+}
+
+/* ---------- Daftar foto ---------- */
+async function addFiles(list){
+  const files=[...list].filter(f=>f.type.startsWith("image/")||RAW.test(f.name));
+  let bad=0,raws=0;
+  for(let n=0;n<files.length;n++){
+    const f=files[n];msg(`Membaca ${n+1}/${files.length}: ${f.name}`);
+    try{
+      let blob=f;
+      if(RAW.test(f.name)){blob=extractJpeg(new Uint8Array(await f.arrayBuffer()));if(!blob)throw 0;raws++;}
+      const bm=await createImageBitmap(blob,{imageOrientation:"from-image"});
+      const k=120/Math.max(bm.width,bm.height),c=document.createElement("canvas");
+      c.width=Math.max(1,Math.round(bm.width*k));c.height=Math.max(1,Math.round(bm.height*k));
+      c.getContext("2d").drawImage(bm,0,0,c.width,c.height);bm.close();
+      photos.push({name:f.name,blob,thumb:c.toDataURL("image/jpeg",.7),s:zero(),rot:0,mask:null,on:true});
+    }catch(e){bad++;}
+  }
+  strip();if(photos.length&&!cur)await select(0);
+  msg(`${files.length-bad} foto dimuat.`+(raws?" File RAW dibaca lewat preview JPEG di dalamnya.":"")+(bad?` ${bad} file gagal dibaca (format tidak didukung atau tidak ada preview JPEG).`:""));
+}
+function strip(){
+  const s=$("strip");s.innerHTML="";
+  photos.forEach((p,i)=>{
+    const d=document.createElement("div");d.className="th"+(i===idx?" sel":"");d.title=p.name;d.tabIndex=0;
+    const im=document.createElement("img");im.src=p.thumb;im.alt=p.name;
+    const cb=document.createElement("input");cb.type="checkbox";cb.checked=p.on;cb.title="Ikut batch dan ekspor";
+    cb.onclick=e=>e.stopPropagation();cb.onchange=()=>p.on=cb.checked;
+    d.append(im,cb);d.onclick=()=>select(i);d.onkeydown=e=>{if(e.key==="Enter")select(i);};
+    s.appendChild(d);
+  });
+}
+function syncUI(){IDS.forEach(k=>{$("s_"+k).value=cur.s[k];$("o_"+k).textContent=cur.s[k].toFixed(2);});}
+async function select(i){
+  if(!photos[i]||busy)return;
+  cur=photos[i];idx=i;const my=++tok;syncUI();
+  [...$("strip").children].forEach((e,j)=>e.classList.toggle("sel",j===i));
+  $("strip").children[i].scrollIntoView({inline:"nearest",block:"nearest"});
+  $("bgopts").hidden=!cur.mask;$("empty").style.display="none";
+  ["rot","cmp","reset","save","zip","syncb","chk","rmbg","rmall"].forEach(id=>$(id).disabled=false);
+  try{await show(cur,2560,my);msg(`${cur.name} (${i+1}/${photos.length})`);}catch(e){msg("Foto ini tidak bisa ditampilkan.");}
+}
+
+/* ---------- Ekspor ---------- */
+const CT=new Uint32Array(256).map((_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;return c>>>0;});
+function crc32(u){let c=-1;for(let i=0;i<u.length;i++)c=CT[(c^u[i])&255]^(c>>>8);return(c^-1)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],cd=[];let off=0,cds=0;
+  for(const f of files){
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);
+    h.setUint32(14,crc,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nm.length,true);
+    parts.push(h.buffer,nm,f.data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cd.push(c.buffer,nm);off+=30+nm.length+sz;cds+=46+nm.length;
+  }
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cds,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cd,e.buffer],{type:"application/zip"});
+}
+const base=n=>n.replace(/\.[^.]+$/,"");
+function download(b,name){const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+async function render(p){
+  bypass=false;await show(p,1e5);
+  const png=p.mask&&$("bgmode").value==="transparent";
+  const b=await new Promise(r=>(p.mask?out:cv).toBlob(r,png?"image/png":"image/jpeg",.95));
+  return [b,png?"png":"jpg"];
+}
+$("save").onclick=async()=>{
+  if(!cur||busy)return;busy=true;
+  try{msg("Menyiapkan file resolusi penuh...");const [b,ext]=await render(cur);download(b,base(cur.name)+"-edit."+ext);msg("Foto tersimpan.");}
+  catch(e){msg("Gagal menyimpan: "+e.message);}
+  busy=false;await select(idx);
+};
+$("zip").onclick=async()=>{
+  const L=photos.filter(p=>p.on);if(busy||!L.length){msg("Centang minimal satu foto untuk diekspor.");return;}
+  busy=true;const files=[],used=new Set();
+  try{
+    for(let n=0;n<L.length;n++){
+      msg(`Mengekspor ${n+1}/${L.length}: ${L[n].name}`);
+      const [b,ext]=await render(L[n]);let nm=base(L[n].name)+"-edit";
+      if(used.has(nm+ext))nm+="-"+(n+1);used.add(nm+ext);
+      files.push({name:nm+"."+ext,data:new Uint8Array(await b.arrayBuffer())});
+    }
+    download(makeZip(files),"instantretoucher.zip");msg(`${L.length} foto diekspor ke ZIP.`);
+  }catch(e){msg("Ekspor berhenti: "+e.message);}
+  busy=false;await select(idx);
+};
+
+/* ---------- Tombol & input ---------- */
+$("file").addEventListener("change",e=>{addFiles(e.target.files);e.target.value="";});
+const stage=$("stage");
+stage.addEventListener("dragover",e=>{e.preventDefault();stage.classList.add("drag");});
+stage.addEventListener("dragleave",()=>stage.classList.remove("drag"));
+stage.addEventListener("drop",e=>{e.preventDefault();stage.classList.remove("drag");addFiles(e.dataTransfer.files);});
+const hold=v=>()=>{bypass=v;draw();};
+$("cmp").addEventListener("pointerdown",hold(true));
+["pointerup","pointerleave","pointercancel"].forEach(ev=>$("cmp").addEventListener(ev,hold(false)));
+$("reset").onclick=()=>{cur.s=zero();syncUI();draw();};
+$("rot").onclick=()=>{cur.rot=(cur.rot+1)%4;cur.mask=null;select(idx);};
+$("syncb").onclick=()=>{let n=0;photos.forEach(p=>{if(p.on&&p!==cur){p.s={...cur.s};n++;}});msg(`Pengaturan foto ini diterapkan ke ${n} foto lain.`);};
+$("chk").onclick=()=>{const all=photos.every(p=>p.on);photos.forEach(p=>p.on=!all);strip();};
+addEventListener("keydown",e=>{
+  if(e.target.matches("input[type=range],select"))return;
+  if(e.key==="ArrowRight")select(idx+1);else if(e.key==="ArrowLeft")select(idx-1);
 });
 </script>
 </body>
