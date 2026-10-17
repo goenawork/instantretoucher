@@ -27,6 +27,7 @@ main{flex:1;display:flex;min-height:0}
 .th.sel{border-color:var(--accent)}
 .th img{width:100%;height:100%;object-fit:cover;display:block}
 .th input{position:absolute;top:3px;left:3px;accent-color:var(--accent)}
+#ov{position:absolute;display:none;touch-action:none;cursor:crosshair}
 aside{width:300px;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:6px 16px 20px}
 h2{font-size:13px;font-weight:600;margin:18px 0 6px;color:var(--mute)}
 .row{display:grid;grid-template-columns:1fr 44px;gap:2px 8px;align-items:center;margin:8px 0}
@@ -39,6 +40,33 @@ h2{font-size:13px;font-weight:600;margin:18px 0 6px;color:var(--mute)}
 .field input[type=color]{padding:0;width:40px;height:30px}
 aside button.w{width:100%;margin-top:6px}
 @media(max-width:760px){main{flex-direction:column}aside{width:100%;border-left:0;border-top:1px solid var(--line);max-height:45%}}
+
+aside{width:290px;padding:0 14px 20px}
+header button,header label.btn{border-color:transparent;background:#1c1c1c}
+header button.primary{background:var(--accent);border-color:var(--accent)}
+.sec{border-bottom:1px solid var(--line)}
+.sec>summary{display:flex;align-items:center;list-style:none;cursor:pointer;padding:12px 2px;font-weight:600;font-size:13px}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary::before{content:"\203A";display:inline-block;width:14px;color:var(--mute)}
+.sec[open]>summary::before{transform:rotate(90deg)}
+.sec>summary span{margin-right:auto}
+.sec .rs{border:0;padding:2px 6px;color:var(--mute);font-size:15px;background:transparent}
+.sec .body{padding:0 2px 12px}
+.row{margin:6px 0 2px}
+.row span{font-size:13px}
+.row output{color:var(--text)}
+.row.sub{padding-left:12px}.row.sub span{color:var(--mute)}
+.row input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--tr,#3a3a3a);margin:7px 0 13px;accent-color:initial}
+.row input[type=range]::-webkit-slider-runnable-track{height:4px;background:transparent}
+.row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:11px;height:10px;margin-top:6px;background:#d8d2cb;clip-path:polygon(50% 0,100% 100%,0 100%);border:0}
+.row input[type=range]::-moz-range-track{background:transparent;height:4px}
+.row input[type=range]::-moz-range-thumb{width:11px;height:10px;background:#d8d2cb;border:0;border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.row input[type=range]:hover::-webkit-slider-thumb{background:var(--accent)}
+.row input[type=range]:hover::-moz-range-thumb{background:var(--accent)}
+.sec button.w{margin:4px 0}
+#bar{display:flex;gap:8px;align-items:center;padding:8px 2px 0;color:var(--mute);font-size:12px}
+#bar span{margin-right:auto}
+#bar button{padding:4px 10px;font-size:12px}
 </style>
 </head>
 <body>
@@ -55,8 +83,9 @@ aside button.w{width:100%;margin-top:6px}
   <div id="stage">
     <div id="view">
       <div id="empty">Tarik foto ke sini atau klik Buka foto.<br>Bisa banyak sekaligus: JPG, PNG, WebP, dan RAW (CR2, CR3, RAF, NEF, ARW, DNG, dll).<br>Semua diproses di browser, tidak ada yang diunggah.</div>
-      <canvas id="cv"></canvas><canvas id="out"></canvas>
+      <canvas id="cv"></canvas><canvas id="out"></canvas><canvas id="ov"></canvas>
     </div>
+    <div id="bar"><span id="cnt">0 foto</span><button id="syncb" disabled>Terapkan ke foto tercentang</button><button id="chk" disabled>Centang semua / kosongkan</button></div>
     <div id="strip"></div>
   </div>
   <aside id="panel"></aside>
@@ -64,58 +93,133 @@ aside button.w{width:100%;margin-top:6px}
 <div id="msg">Siap.</div>
 
 <script>
-const GROUPS=[["Cahaya",[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1]]],
- ["Warna",[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]]];
-const IDS=GROUPS.flatMap(g=>g[1].map(r=>r[0]));
-const zero=()=>Object.fromEntries(IDS.map(k=>[k,0]));
+const TR={temp:"linear-gradient(90deg,#2d5be0,#8e8e8e 50%,#f0c419)",tint:"linear-gradient(90deg,#2fa84f,#8e8e8e 50%,#cc3fc4)",
+ vibrance:"linear-gradient(90deg,#6f7378,#8a8f9a 40%,#c9605a 75%,#e8b13a)",sat:"linear-gradient(90deg,#808080,#5a8fdc 35%,#e0b04a 70%,#e2503c)"};
+const SECS=[
+ ["Cahaya",1,[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1],["whites","Whites",-1,1],["blacks","Blacks",-1,1]]],
+ ["Warna",1,[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]],
+ ["Efek",0,[["fine","Texture",-1,1],["clarity","Clarity",-1,1],["dehaze","Dehaze",-1,1],["vig","Vignette",-1,1],
+   ["vmid","Midpoint",0,1,.5,1],["vround","Roundness",-1,1,0,1],["vfeather","Feather",0,1,.5,1],["vhi","Highlights",0,1,0,1],["grain","Grain",0,1],["gsize","Ukuran grain",0,1,.25,1]]],
+ ["Kulit",0,[["skin","Haluskan kulit",0,1],["keep","Pertahankan tekstur",0,1,.6]]],
+ ["Mata & mulut",0,[["eyes","Cerahkan mata",0,1],["teeth","Putihkan gigi",0,1]]]
+];
+const IDS=SECS.flatMap(g=>g[2].map(r=>r[0]));
+const DEF={};SECS.forEach(g=>g[2].forEach(r=>DEF[r[0]]=r[4]||0));const zero=()=>({...DEF});
+const disp=(id,v)=>id==="exposure"?(+v).toFixed(2):Math.round(v*100);
 const $=id=>document.getElementById(id), msg=t=>$("msg").textContent=t;
 const RAW=/\.(cr2|cr3|crw|raf|nef|nrw|arw|srf|sr2|dng|orf|rw2|pef|srw|3fr|erf|mrw|kdc|dcr|raw)$/i;
 const photos=[], wc=document.createElement("canvas"), cv=$("cv"), out=$("out"), panel=$("panel");
-let cur=null, idx=-1, bypass=false, busy=false, tex=null, seg=null, tok=0;
+let cur=null, idx=-1, bypass=false, busy=false, tex=null, seg=null, tok=0, mtex=null, mown=null, lm=null;
 
 /* ---------- Panel ---------- */
-GROUPS.forEach(([title,items])=>{
-  panel.insertAdjacentHTML("beforeend",`<h2>${title}</h2>`);
-  items.forEach(([id,label,min,max])=>{
-    panel.insertAdjacentHTML("beforeend",`<div class="row"><span>${label}</span><output id="o_${id}">0.00</output><input id="s_${id}" type="range" min="${min}" max="${max}" step="0.01" value="0" aria-label="${label}"></div>`);
-    const s=$("s_"+id);
-    s.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+s.value;$("o_"+id).textContent=(+s.value).toFixed(2);draw();});
-    s.addEventListener("dblclick",()=>{s.value=0;s.dispatchEvent(new Event("input"));});
+SECS.forEach(([title,open,items])=>{
+  const d=document.createElement("details");d.className="sec";d.open=!!open;
+  d.innerHTML=`<summary><span>${title}</span><button class="rs" title="Reset bagian ini" aria-label="Reset ${title}">&#10226;</button></summary><div class="body"></div>`;
+  const body=d.querySelector(".body");
+  items.forEach(([id,label,min,max,def=0,sub])=>{
+    body.insertAdjacentHTML("beforeend",`<div class="row${sub?" sub":""}"><span>${label}</span><output id="o_${id}">${disp(id,def)}</output><input id="s_${id}" type="range" min="${min}" max="${max}" step="0.01" value="${def}" style="--tr:${TR[id]||"#3a3a3a"}" aria-label="${label}"></div>`);
+    const sl=body.querySelector("#s_"+id);
+    sl.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+sl.value;$("o_"+id).textContent=disp(id,+sl.value);
+      if(["skin","teeth","eyes"].includes(id)&&+sl.value>0&&!cur.faces&&!busy)ensureFaces(cur).then(()=>draw());draw();});
+    sl.addEventListener("dblclick",()=>{sl.value=def;sl.dispatchEvent(new Event("input"));});
   });
+  d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();if(!cur)return;items.forEach(r=>{cur.s[r[0]]=r[4]||0;});syncUI();draw();};
+  panel.appendChild(d);
 });
 panel.insertAdjacentHTML("beforeend",`
-  <h2>Batch</h2>
-  <button id="syncb" class="w" disabled>Terapkan ke foto tercentang</button>
-  <button id="chk" class="w" disabled>Centang semua / kosongkan</button>
-  <h2>Background</h2>
-  <button id="rmbg" class="w" disabled>Pisahkan subjek (AI)</button>
-  <button id="rmall" class="w" disabled>Pisahkan semua yang tercentang</button>
-  <div id="bgopts" hidden>
-    <div class="field"><select id="bgmode" aria-label="Jenis latar">
-      <option value="transparent">Transparan</option><option value="color">Warna</option>
-      <option value="image">Gambar</option><option value="original">Latar asli</option></select>
-      <input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
-      <label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
-    <div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
-      <input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
-  </div>`);
+  <details class="sec"><summary><span>Kilau kacamata</span></summary><div class="body">
+    <button id="gfix" class="w" disabled>Hapus kilau otomatis</button>
+    <div class="row"><span>Ambang kilau (turunkan = lebih banyak)</span><output id="o_gt">0.88</output><input id="gthr" type="range" min="0.6" max="0.99" step="0.01" value="0.88" aria-label="Ambang kilau"></div>
+    <button id="gbrush" class="w" disabled>Kuas kilau: mati</button>
+    <div class="row"><span>Ukuran kuas</span><output id="o_gs">3</output><input id="gsize" type="range" min="0.5" max="10" step="0.5" value="3" aria-label="Ukuran kuas"></div>
+    <button id="gclear" class="w" disabled>Batalkan perbaikan kilau</button>
+  </div></details>
+  <details class="sec"><summary><span>Latar</span></summary><div class="body">
+    <button id="rmbg" class="w" disabled>Pisahkan subjek (AI)</button>
+    <button id="rmall" class="w" disabled>Pisahkan semua yang tercentang</button>
+    <div id="bgopts" hidden>
+      <div class="field"><select id="bgmode" aria-label="Jenis latar">
+        <option value="transparent">Transparan</option><option value="color">Warna</option>
+        <option value="image">Gambar</option><option value="original">Latar asli</option></select>
+        <input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
+        <label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
+      <div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
+        <input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
+    </div>
+  </div></details>`);
 
 /* ---------- WebGL ---------- */
 const gl=cv.getContext("webgl",{preserveDrawingBuffer:true,premultipliedAlpha:false});
 const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
 const FS=`precision highp float;varying vec2 v;uniform sampler2D t;
-uniform float exposure,contrast,highlights,shadows,temp,tint,vibrance,sat;
+uniform sampler2D mk;uniform float hasMask,asp,faceW,skin,keep,teeth,eyes;
+uniform float exposure,contrast,highlights,shadows,whites,blacks,temp,tint,vibrance,sat;
+uniform float fine,clarity,dehaze,vig,vmid,vround,vfeather,vhi,grain,gsize;
+uniform vec2 res;
+const vec3 LW=vec3(.2126,.7152,.0722);
+vec3 blurAt(float rad){
+  vec3 s=vec3(0.);
+  for(int i=0;i<16;i++){float fi=float(i)+.5,a=fi*2.39996,r=sqrt(fi/16.)*rad;
+    s+=texture2D(t,v+vec2(cos(a),sin(a)*asp)*r).rgb;}
+  return s/16.;
+}
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 void main(){
-  vec3 c=texture2D(t,v).rgb;
+  vec3 c=texture2D(t,v).rgb, c0=c;
+  if(hasMask>.5){
+    vec3 m=texture2D(mk,v).rgb;
+    float sm=skin*m.r;
+    if(sm>.003){
+      float rad=faceW*(.008+.012*skin), sg=.05+.12*skin;
+      vec3 acc=vec3(0.),pl=vec3(0.);float ws=0.;
+      for(int i=0;i<24;i++){
+        float fi=float(i)+.5, a=fi*2.39996, r=sqrt(fi/24.)*rad;
+        vec3 s=texture2D(t,v+vec2(cos(a),sin(a)*asp)*r).rgb;
+        float d=distance(s,c), w=exp(-d*d/(2.*sg*sg));
+        acc+=s*w; ws+=w; pl+=s;
+      }
+      vec3 sb=acc/ws, lp=pl/24.;
+      c=mix(c,clamp(sb+(c-lp)*keep,0.,1.),sm);
+    }
+    float l0=dot(c,LW);
+    float red=c.r-.5*(c.g+c.b);
+    float tw=teeth*m.g*smoothstep(.25,.45,l0)*(1.-smoothstep(.06,.18,red));
+    c=mix(c,mix(vec3(l0),c,.5)*(1.+.2*teeth),tw);
+    c=mix(c,c*1.2+.03,eyes*m.b*smoothstep(.4,.75,l0));
+  }
   c=pow(c,vec3(2.2))*pow(2.,exposure); c=pow(clamp(c,0.,8.),vec3(1./2.2));
   c.r+=temp*.12; c.b-=temp*.12; c.g-=tint*.08; c.r+=tint*.04; c.b+=tint*.04;
-  float l=dot(c,vec3(.2126,.7152,.0722));
+  float l=dot(c,LW);
   float sh=pow(1.-clamp(l,0.,1.),2.), hi=pow(clamp(l,0.,1.),2.);
   c+=shadows*.3*sh*(1.-l*.5); c+=highlights*.3*hi;
+  c+=whites*.2*smoothstep(.55,1.,l); c+=blacks*.2*(1.-smoothstep(0.,.45,l));
   c=(c-.5)*(1.+contrast)+.5;
-  l=dot(c,vec3(.2126,.7152,.0722));
+  float lm0=dot(c0,LW);
+  if(abs(fine)>.003) c+=(lm0-dot(blurAt(.0015),LW))*fine*1.5;
+  if(abs(clarity)>.003) c+=(lm0-dot(blurAt(.012),LW))*clarity*1.3*clamp(1.-abs(l-.5)*1.6,0.,1.);
+  if(abs(dehaze)>.003){
+    vec3 A=vec3(.92);
+    if(dehaze>0.){float tr=max(1.-.8*dehaze*min(c.r,min(c.g,c.b))/.92,.25);c=(c-A)/tr+A;}
+    else c=mix(c,A,-dehaze*.35);
+  }
+  l=dot(c,LW);
   float mx=max(c.r,max(c.g,c.b)), mn=min(c.r,min(c.g,c.b));
-  c=mix(vec3(l),c,1.+sat+vibrance*(1.-(mx-mn)));
+  float skinw=(c.r>c.g&&c.g>c.b)?smoothstep(.15,.35,c.r):0.;
+  c=mix(vec3(l),c,1.+sat+vibrance*(1.-(mx-mn))*(1.-.5*skinw));
+  if(abs(vig)>.003){
+    vec2 q=(v-.5)*2.; float rd=max(vround,0.);
+    vec2 qq=vec2(q.x*mix(1.,asp,rd),q.y)/mix(1.,max(asp,1.),rd);
+    float pw=mix(2.,5.,max(-vround,0.));
+    float d=pow(pow(abs(qq.x),pw)+pow(abs(qq.y),pw),1./pw);
+    float s0=mix(.1,1.1,vmid), vm=smoothstep(s0,s0+mix(.05,1.,vfeather),d);
+    float prot=1.-vhi*smoothstep(.5,1.,dot(c,LW));
+    if(vig<0.) c*=1.+vig*vm*prot; else c=mix(c,vec3(1.),vig*vm*prot*.8);
+  }
+  if(grain>.003){
+    float cell=max(1.,res.x/2200.*mix(1.,3.5,gsize)); vec2 g=floor(v*res/cell);
+    float n=hash(g)+hash(g+17.3)-1.; float lg=dot(c,LW);
+    c+=n*grain*.22*(1.-pow(abs(lg*2.-1.),2.)*.7);
+  }
   gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
 const U={}; let MAXT=4096;
@@ -128,12 +232,23 @@ else{
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
   const loc=gl.getAttribLocation(pr,"p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
   IDS.forEach(k=>U[k]=gl.getUniformLocation(pr,k)); MAXT=gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  ["hasMask","asp","faceW","res"].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+  gl.uniform1i(gl.getUniformLocation(pr,"t"),0); gl.uniform1i(gl.getUniformLocation(pr,"mk"),1); mtex=gl.createTexture();
 }
 
 function draw(p=cur){
   if(!p||!tex)return;
   gl.viewport(0,0,cv.width,cv.height);
   const off=bypass&&p===cur;
+  if(mown!==p.fmask){
+    mown=p.fmask;gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,mtex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+    if(p.fmask)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,p.fmask);
+    else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
+    [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+    [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
+    gl.activeTexture(gl.TEXTURE0);
+  }
+  gl.uniform1f(U.hasMask,p.fmask?1:0);gl.uniform1f(U.asp,cv.width/cv.height);gl.uniform1f(U.faceW,p.faceW||.3);gl.uniform2f(U.res,cv.width,cv.height);
   IDS.forEach(k=>gl.uniform1f(U[k],off?0:p.s[k]));
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4); composite(p);
 }
@@ -146,6 +261,9 @@ async function show(p,cap,tk){
   wc.width=Math.round(sw*k); wc.height=Math.round(sh*k);
   const c=wc.getContext("2d"); c.translate(wc.width/2,wc.height/2); c.rotate(p.rot*Math.PI/2);
   c.drawImage(bm,-bm.width*k/2,-bm.height*k/2,bm.width*k,bm.height*k); bm.close();
+  const G=p.glare.auto||p.glare.strokes.length;
+  if(G||p.s.skin>0||p.s.teeth>0||p.s.eyes>0){await ensureFaces(p);if(tk!==undefined&&tk!==tok)return;}
+  if(G)applyGlare(p);
   cv.width=wc.width; cv.height=wc.height;
   if(tex)gl.deleteTexture(tex); tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
@@ -244,14 +362,14 @@ async function addFiles(list){
       const k=120/Math.max(bm.width,bm.height),c=document.createElement("canvas");
       c.width=Math.max(1,Math.round(bm.width*k));c.height=Math.max(1,Math.round(bm.height*k));
       c.getContext("2d").drawImage(bm,0,0,c.width,c.height);bm.close();
-      photos.push({name:f.name,blob,thumb:c.toDataURL("image/jpeg",.7),s:zero(),rot:0,mask:null,on:true});
+      photos.push({name:f.name,blob,thumb:c.toDataURL("image/jpeg",.7),s:zero(),rot:0,mask:null,on:true,glare:{auto:false,thr:.88,strokes:[]}});
     }catch(e){bad++;}
   }
   strip();if(photos.length&&!cur)await select(0);
   msg(`${files.length-bad} foto dimuat.`+(raws?" File RAW dibaca lewat preview JPEG di dalamnya.":"")+(bad?` ${bad} file gagal dibaca (format tidak didukung atau tidak ada preview JPEG).`:""));
 }
 function strip(){
-  const s=$("strip");s.innerHTML="";
+  const s=$("strip");s.innerHTML="";$("cnt").textContent=photos.length+" foto";
   photos.forEach((p,i)=>{
     const d=document.createElement("div");d.className="th"+(i===idx?" sel":"");d.title=p.name;d.tabIndex=0;
     const im=document.createElement("img");im.src=p.thumb;im.alt=p.name;
@@ -261,15 +379,15 @@ function strip(){
     s.appendChild(d);
   });
 }
-function syncUI(){IDS.forEach(k=>{$("s_"+k).value=cur.s[k];$("o_"+k).textContent=cur.s[k].toFixed(2);});}
+function syncUI(){IDS.forEach(k=>{$("s_"+k).value=cur.s[k];$("o_"+k).textContent=disp(k,cur.s[k]);});$("gthr").value=cur.glare.thr;$("o_gt").textContent=cur.glare.thr.toFixed(2);}
 async function select(i){
   if(!photos[i]||busy)return;
   cur=photos[i];idx=i;const my=++tok;syncUI();
   [...$("strip").children].forEach((e,j)=>e.classList.toggle("sel",j===i));
   $("strip").children[i].scrollIntoView({inline:"nearest",block:"nearest"});
   $("bgopts").hidden=!cur.mask;$("empty").style.display="none";
-  ["rot","cmp","reset","save","zip","syncb","chk","rmbg","rmall"].forEach(id=>$(id).disabled=false);
-  try{await show(cur,2560,my);msg(`${cur.name} (${i+1}/${photos.length})`);}catch(e){msg("Foto ini tidak bisa ditampilkan.");}
+  ["rot","cmp","reset","save","zip","syncb","chk","rmbg","rmall","gfix","gbrush","gclear"].forEach(id=>$(id).disabled=false);
+  try{await show(cur,2560,my);if(brush){placeOv();drawOv();}msg(`${cur.name} (${i+1}/${photos.length})`);}catch(e){msg("Foto ini tidak bisa ditampilkan.");}
 }
 
 /* ---------- Ekspor ---------- */
@@ -321,6 +439,147 @@ $("zip").onclick=async()=>{
   busy=false;await select(idx);
 };
 
+/* ---------- Wajah & kilau kacamata ---------- */
+const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const EYEL=[263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466],EYER=[33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246];
+const BROWL=[276,283,282,295,285,300,293,334,296,336],BROWR=[46,53,52,65,55,70,63,105,66,107];
+const LIPO=[61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185],LIPI=[78,95,88,178,87,14,317,402,318,324,308,415,310,311,312,13,82,81,80,191];
+let brush=false,stroke=null;
+async function getLM(){
+  if(lm)return lm;
+  msg("Memuat model deteksi wajah (sekali saja)...");
+  const B="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+  let V;try{V=await import(B+"/vision_bundle.mjs");}catch(e){V=await import(B);}
+  const fs=await V.FilesetResolver.forVisionTasks(B+"/wasm");
+  lm=await V.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"},runningMode:"IMAGE",numFaces:6});
+  return lm;
+}
+function ensureFaces(p){
+  if(p.faces)return Promise.resolve();
+  return p._fp||(p._fp=(async()=>{
+    try{const L=await getLM();p.faces=L.detect(wc).faceLandmarks||[];}
+    catch(e){p.faces=[];msg("Deteksi wajah gagal: "+e.message);}
+    if(p.faces.length)buildMask(p);
+  })());
+}
+function buildMask(p){
+  const W=Math.min(1024,wc.width),H=Math.max(1,Math.round(W*wc.height/wc.width));
+  const mk=(fn,blur)=>{const c=document.createElement("canvas");c.width=W;c.height=H;fn(c.getContext("2d"));
+    const d=document.createElement("canvas");d.width=W;d.height=H;const y=d.getContext("2d");y.filter=`blur(${blur}px)`;y.drawImage(c,0,0);return y.getImageData(0,0,W,H).data;};
+  const poly=(x,f,ids,grow)=>{x.beginPath();ids.forEach((i,k)=>{const q=f[i];k?x.lineTo(q.x*W,q.y*H):x.moveTo(q.x*W,q.y*H);});x.closePath();x.fill();if(grow){x.lineWidth=grow;x.stroke();}};
+  const sk=mk(x=>p.faces.forEach(f=>{x.fillStyle="#fff";poly(x,f,OVAL);x.globalCompositeOperation="destination-out";
+    [EYEL,EYER,BROWL,BROWR,LIPO].forEach(r=>poly(x,f,r,W*.012));x.globalCompositeOperation="source-over";}),W*.006);
+  const te=mk(x=>{x.fillStyle="#fff";p.faces.forEach(f=>poly(x,f,LIPI));},W*.002);
+  const ey=mk(x=>{x.fillStyle="#fff";p.faces.forEach(f=>{poly(x,f,EYEL);poly(x,f,EYER);});},W*.002);
+  const md=new ImageData(W,H);
+  for(let i=0;i<W*H;i++){md.data[i*4]=sk[i*4+3];md.data[i*4+1]=te[i*4+3];md.data[i*4+2]=ey[i*4+3];md.data[i*4+3]=255;}
+  p.fmask=md;
+  p.faceW=p.faces.reduce((a,f)=>{let lo=1,hi=0;OVAL.forEach(i=>{lo=Math.min(lo,f[i].x);hi=Math.max(hi,f[i].x);});return a+(hi-lo);},0)/p.faces.length;
+}
+function eyeBoxes(p){
+  const r=[];
+  p.faces.forEach(f=>[EYEL,EYER].forEach(ids=>{
+    let a=9,b=-9,c=9,d=-9;ids.forEach(i=>{a=Math.min(a,f[i].x);b=Math.max(b,f[i].x);c=Math.min(c,f[i].y);d=Math.max(d,f[i].y);});
+    const w=(b-a)*wc.width;r.push({cx:(a+b)/2*wc.width,cy:(c+d)/2*wc.height,rx:w,ry:w*.75});
+  }));
+  return r;
+}
+function dilate(M,w,h,d){
+  const T=new Uint8Array(M.length),R=new Uint8Array(M.length);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(M[y*w+x])for(let k=Math.max(0,x-d);k<=Math.min(w-1,x+d);k++)T[y*w+k]=1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(T[y*w+x])for(let k=Math.max(0,y-d);k<=Math.min(h-1,y+d);k++)R[k*w+x]=1;
+  return R;
+}
+function pushPull(D,M,w,h){
+  const c=new Float32Array(w*h*3),k=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++)if(!M[i]){k[i]=1;c[i*3]=D[i*4];c[i*3+1]=D[i*4+1];c[i*3+2]=D[i*4+2];}
+  const lv=[{c,k,w,h}];
+  while(lv[lv.length-1].w>1||lv[lv.length-1].h>1){
+    const a=lv[lv.length-1],w2=Math.ceil(a.w/2),h2=Math.ceil(a.h/2),c2=new Float32Array(w2*h2*3),k2=new Float32Array(w2*h2);
+    for(let y=0;y<h2;y++)for(let x=0;x<w2;x++){
+      let s=0,r=0,g=0,b=0,n=0;
+      for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){const xx=x*2+dx,yy=y*2+dy;if(xx<a.w&&yy<a.h){n++;const j=yy*a.w+xx,q=a.k[j];s+=q;r+=a.c[j*3]*q;g+=a.c[j*3+1]*q;b+=a.c[j*3+2]*q;}}
+      const o=y*w2+x;if(s>0){c2[o*3]=r/s;c2[o*3+1]=g/s;c2[o*3+2]=b/s;k2[o]=s/n;}
+    }
+    lv.push({c:c2,k:k2,w:w2,h:h2});
+  }
+  for(let L=lv.length-2;L>=0;L--){
+    const f=lv[L],q=lv[L+1];
+    for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){
+      const o=y*f.w+x,kk=f.k[o];if(kk>=1)continue;
+      const fx=Math.min(q.w-1,Math.max(0,(x+.5)/2-.5)),fy=Math.min(q.h-1,Math.max(0,(y+.5)/2-.5));
+      const x0=Math.floor(fx),y0=Math.floor(fy),x1=Math.min(q.w-1,x0+1),y1=Math.min(q.h-1,y0+1),tx=fx-x0,ty=fy-y0;
+      for(let ch=0;ch<3;ch++){
+        const v=(q.c[(y0*q.w+x0)*3+ch]*(1-tx)+q.c[(y0*q.w+x1)*3+ch]*tx)*(1-ty)+(q.c[(y1*q.w+x0)*3+ch]*(1-tx)+q.c[(y1*q.w+x1)*3+ch]*tx)*ty;
+        f.c[o*3+ch]=f.c[o*3+ch]*kk+v*(1-kk);
+      }
+      f.k[o]=1;
+    }
+  }
+  return lv[0].c;
+}
+function applyGlare(p){
+  const W=wc.width,H=wc.height,E=p.glare.auto&&p.faces?eyeBoxes(p):[],S=p.glare.strokes;
+  let x0=W,y0=H,x1=0,y1=0;const ext=(a,b,c,d)=>{x0=Math.min(x0,a);y0=Math.min(y0,b);x1=Math.max(x1,c);y1=Math.max(y1,d);};
+  E.forEach(e=>ext(e.cx-e.rx,e.cy-e.ry,e.cx+e.rx,e.cy+e.ry));
+  S.forEach(s=>{const r=s.r*W;s.pts.forEach(q=>ext(q[0]*W-r,q[1]*H-r,q[0]*W+r,q[1]*H+r));});
+  if(x1<=x0)return;
+  const pad=Math.round(W*.01);
+  x0=Math.max(0,Math.floor(x0-pad));y0=Math.max(0,Math.floor(y0-pad));x1=Math.min(W,Math.ceil(x1+pad));y1=Math.min(H,Math.ceil(y1+pad));
+  const bw=x1-x0,bh=y1-y0,ctx=wc.getContext("2d"),img=ctx.getImageData(x0,y0,bw,bh),D=img.data,M=new Uint8Array(bw*bh),thr=p.glare.thr;
+  for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){
+    const wx=x0+x,wy=y0+y;
+    if(!E.some(e=>((wx-e.cx)/e.rx)**2+((wy-e.cy)/e.ry)**2<=1))continue;
+    const i=(y*bw+x)*4,r=D[i],g=D[i+1],b=D[i+2];
+    if((.2126*r+.7152*g+.0722*b)/255>thr&&Math.max(r,g,b)-Math.min(r,g,b)<90)M[y*bw+x]=1;
+  }
+  if(S.length){
+    const t=document.createElement("canvas");t.width=bw;t.height=bh;const tc=t.getContext("2d");
+    tc.lineCap=tc.lineJoin="round";tc.strokeStyle="#fff";
+    S.forEach(s=>{tc.lineWidth=s.r*W*2;tc.beginPath();s.pts.forEach((q,k)=>{const X=q[0]*W-x0,Y=q[1]*H-y0;k?tc.lineTo(X,Y):tc.moveTo(X,Y);});
+      if(s.pts.length===1)tc.lineTo(s.pts[0][0]*W-x0+.01,s.pts[0][1]*H-y0);tc.stroke();});
+    const a=tc.getImageData(0,0,bw,bh).data;for(let i=0;i<bw*bh;i++)if(a[i*4+3]>60)M[i]=1;
+  }
+  if(!M.some(v=>v))return;
+  const MD=dilate(M,bw,bh,Math.max(2,Math.round(W*.002))),F=pushPull(D,MD,bw,bh);
+  let sum=0,n=0;
+  for(let y=0;y<bh;y+=2)for(let x=0;x<bw-1;x+=2){const i=y*bw+x;if(!MD[i]&&!MD[i+1]){sum+=Math.abs(D[i*4+1]-D[(i+1)*4+1]);n++;}}
+  const sg=n?sum/n*.8:0,nz=()=>(Math.random()+Math.random()-1)*sg*1.7;
+  for(let i=0;i<bw*bh;i++)if(MD[i]){const z=nz();for(let ch=0;ch<3;ch++)D[i*4+ch]=Math.max(0,Math.min(255,F[i*3+ch]+z));D[i*4+3]=255;}
+  ctx.putImageData(img,x0,y0);
+}
+async function refresh(){const my=++tok;try{await show(cur,2560,my);}catch(e){msg("Gagal memproses: "+e.message);}if(brush){placeOv();drawOv();}}
+$("gfix").onclick=async()=>{
+  if(!cur||busy)return;cur.glare.auto=true;cur.glare.thr=+$("gthr").value;msg("Mencari dan menghapus kilau...");
+  await refresh();
+  msg(cur.faces&&cur.faces.length?"Kilau di area mata sudah diproses. Atur Ambang kilau, atau pakai kuas untuk area yang masih tersisa.":"Wajah tidak terdeteksi. Pakai Kuas kilau untuk menandai area kilau secara manual.");
+};
+$("gthr").oninput=()=>{$("o_gt").textContent=(+$("gthr").value).toFixed(2);};
+$("gthr").onchange=()=>{if(cur&&cur.glare.auto)$("gfix").onclick();else if(cur)cur.glare.thr=+$("gthr").value;};
+$("gclear").onclick=async()=>{if(!cur)return;cur.glare={auto:false,thr:.88,strokes:[]};syncUI();await refresh();msg("Perbaikan kilau dibatalkan.");};
+const ov=$("ov");
+function placeOv(){
+  const v=out.style.display==="block"?out:cv,r=v.getBoundingClientRect(),pr=$("view").getBoundingClientRect();
+  Object.assign(ov.style,{left:r.left-pr.left+"px",top:r.top-pr.top+"px",width:r.width+"px",height:r.height+"px"});
+  ov.width=Math.round(r.width);ov.height=Math.round(r.height);
+}
+function drawOv(){
+  const c=ov.getContext("2d");c.clearRect(0,0,ov.width,ov.height);if(!cur)return;
+  c.lineCap=c.lineJoin="round";c.strokeStyle="rgba(255,122,26,.5)";
+  [...cur.glare.strokes,...(stroke?[stroke]:[])].forEach(s=>{
+    c.lineWidth=s.r*ov.width*2;c.beginPath();
+    s.pts.forEach((q,k)=>{const X=q[0]*ov.width,Y=q[1]*ov.height;k?c.lineTo(X,Y):c.moveTo(X,Y);});
+    if(s.pts.length===1)c.lineTo(s.pts[0][0]*ov.width+.01,s.pts[0][1]*ov.height);c.stroke();
+  });
+}
+$("gbrush").onclick=()=>{brush=!brush;$("gbrush").textContent="Kuas kilau: "+(brush?"nyala":"mati");ov.style.display=brush?"block":"none";if(brush){placeOv();drawOv();}};
+$("gsize").oninput=()=>{$("o_gs").textContent=$("gsize").value;};
+const pt=e=>{const r=ov.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];};
+ov.onpointerdown=e=>{ov.setPointerCapture(e.pointerId);stroke={r:$("gsize").value/200,pts:[pt(e)]};drawOv();};
+ov.onpointermove=e=>{if(stroke){stroke.pts.push(pt(e));drawOv();}};
+ov.onpointerup=async()=>{if(!stroke)return;cur.glare.strokes.push(stroke);stroke=null;await refresh();msg("Area kilau diperbaiki. Tambah goresan lagi kalau masih ada sisa.");};
+addEventListener("resize",()=>{if(brush){placeOv();drawOv();}});
+
 /* ---------- Tombol & input ---------- */
 $("file").addEventListener("change",e=>{addFiles(e.target.files);e.target.value="";});
 const stage=$("stage");
@@ -331,8 +590,8 @@ const hold=v=>()=>{bypass=v;draw();};
 $("cmp").addEventListener("pointerdown",hold(true));
 ["pointerup","pointerleave","pointercancel"].forEach(ev=>$("cmp").addEventListener(ev,hold(false)));
 $("reset").onclick=()=>{cur.s=zero();syncUI();draw();};
-$("rot").onclick=()=>{cur.rot=(cur.rot+1)%4;cur.mask=null;select(idx);};
-$("syncb").onclick=()=>{let n=0;photos.forEach(p=>{if(p.on&&p!==cur){p.s={...cur.s};n++;}});msg(`Pengaturan foto ini diterapkan ke ${n} foto lain.`);};
+$("rot").onclick=()=>{cur.rot=(cur.rot+1)%4;cur.mask=null;cur.faces=null;cur.fmask=null;cur._fp=null;cur.glare.strokes=[];select(idx);};
+$("syncb").onclick=()=>{let n=0;photos.forEach(p=>{if(p.on&&p!==cur){p.s={...cur.s};p.glare.auto=cur.glare.auto;p.glare.thr=cur.glare.thr;n++;}});msg(`Pengaturan foto ini diterapkan ke ${n} foto lain.`);};
 $("chk").onclick=()=>{const all=photos.every(p=>p.on);photos.forEach(p=>p.on=!all);strip();};
 addEventListener("keydown",e=>{
   if(e.target.matches("input[type=range],select"))return;
