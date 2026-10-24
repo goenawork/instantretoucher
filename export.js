@@ -6,8 +6,9 @@ async function render(p){
   bypass=false;await show(p,1e5);
   const png=p.mask&&$("bgmode").value==="transparent";
   const f=png||$("fmt").value==="png"?["image/png","png"]:["image/jpeg","jpg"];
-  const blob=await new Promise(r=>(p.mask?out:cv).toBlob(r,f[0],1));
-  return {blob,ext:f[1],w:cv.width,h:cv.height,small:cv.width<p.sw};
+ const blob=await new Promise(r=>(p.mask?out:cv).toBlob(r,f[0],1));
+try{window.logEdit&&window.logEdit(p);}catch(e){}
+return {blob,ext:f[1],w:cv.width,h:cv.height,small:cv.width<p.sw};
 }
 $("save").onclick=async()=>{
   if(!cur||busy)return;busy=true;let last="";
