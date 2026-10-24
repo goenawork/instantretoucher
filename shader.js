@@ -5,7 +5,7 @@ uniform sampler2D mk;uniform float hasMask,asp,faceW,skin,keep,teeth,eyes;
 uniform float exposure,contrast,highlights,shadows,whites,blacks,temp,tint,vibrance,sat;
 uniform float fine,clarity,dehaze,vig,vmid,vround,vfeather,vhi,grain,gsize;
 uniform vec2 res;
-uniform sampler2D ct;uniform float cv_hi,cv_li,cv_da,cv_sh;
+uniform sampler2D ct;uniform float cvOn;
 uniform float hue_red,hue_orange,hue_yellow,hue_green,hue_aqua,hue_blue,hue_purple,hue_magenta;
 uniform float sat_red,sat_orange,sat_yellow,sat_green,sat_aqua,sat_blue,sat_purple,sat_magenta;
 uniform float lum_red,lum_orange,lum_yellow,lum_green,lum_aqua,lum_blue,lum_purple,lum_magenta;
@@ -79,7 +79,7 @@ vec3 A=vec3(.92);
 if(dehaze>0.){float tr=max(1.-.8*dehaze*min(c.r,min(c.g,c.b))/.92,.25);c=(c-A)/tr+A;}
 else c=mix(c,A,-dehaze*.35);
 }
-if(abs(cv_hi)+abs(cv_li)+abs(cv_da)+abs(cv_sh)>.003) c=crv(c);
+if(cvOn>.5) c=crv(c);
 l=dot(c,LW);
 float mx=max(c.r,max(c.g,c.b)), mn=min(c.r,min(c.g,c.b));
 float skinw=(c.r>c.g&&c.g>c.b)?smoothstep(.15,.35,c.r):0.;

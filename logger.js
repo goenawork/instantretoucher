@@ -170,9 +170,14 @@
   }
 
   async function record(p) {
-    if (!p || !p.s || !p.thumb || !isEdited(p.s)) return;
+    const pcOn = (typeof pcIsId === "function" && p) ? !pcIsId(p.pc) : false;
+    if (!p || !p.s || !p.thumb || (!isEdited(p.s) && !pcOn)) return;
     const settings = {};
     Object.keys(p.s).forEach(k => { settings[k] = r4(+p.s[k]); });
+    if (pcOn) {
+      settings.pc = p.pc.map(a => [r4(a[0]), r4(a[1])]);
+      if (typeof pcSample9 === "function") settings.pc9 = pcSample9(p.pc).map(r4);
+    }
     const sig = JSON.stringify(settings);
     if (seen.get(p.name) === sig) return;
     seen.set(p.name, sig);
