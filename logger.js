@@ -77,15 +77,22 @@
   };
 
   /* ---------- Supabase ---------- */
+  // Memberi tahu modul lain (store.js) siapa yang sedang login.
+  function announce() {
+    window.irAuth = { ready: true, user: user };
+    window.dispatchEvent(new CustomEvent("ir-auth"));
+  }
+
   function init() {
     sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
     sb.auth.getSession().then(({ data }) => {
       user = (data.session && data.session.user) || null;
       refresh();
+      announce();
       if (user) flush();
       else if (!sessionStorage.getItem("ir_login_asked")) { sessionStorage.setItem("ir_login_asked", "1"); dlg.showModal(); }
     });
-    sb.auth.onAuthStateChange((_e, s) => { user = (s && s.user) || null; refresh(); if (user) flush(); });
+    sb.auth.onAuthStateChange((_e, s) => { user = (s && s.user) || null; refresh(); announce(); if (user) flush(); });
   }
 
   const lib = document.createElement("script");
