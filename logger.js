@@ -17,13 +17,7 @@
   const getQ = () => { try { return JSON.parse(localStorage.getItem(QKEY) || "[]"); } catch (e) { return []; } };
   const setQ = q => { try { localStorage.setItem(QKEY, JSON.stringify(q.slice(-500))); } catch (e) {} };
 
-  /* ---------- Tampilan kecil: lencana status + dialog login ---------- */
-  const badge = document.createElement("button");
-  badge.type = "button";
-  badge.style.cssText = "position:fixed;right:12px;bottom:6px;z-index:50;padding:3px 10px;font:12px system-ui,sans-serif;" +
-    "background:#1b1b1b;color:#ddd;border:1px solid #444;border-radius:6px;cursor:pointer";
-  document.body.appendChild(badge);
-
+  /* ---------- Dialog login ---------- */
   const dlg = document.createElement("dialog");
   dlg.style.cssText = "background:#1a1a1a;color:#eee;border:1px solid #444;border-radius:10px;padding:18px;font:14px system-ui,sans-serif";
   dlg.innerHTML =
@@ -41,29 +35,110 @@
 
   const $$ = id => dlg.querySelector("#" + id);
 
+  /* ---------- Akun di pojok kanan atas (avatar + menu), mirip Evoto ---------- */
+  const DEV_KEY = "ir_device_name";
+  const deviceName = () => {
+    try {
+      let n = localStorage.getItem(DEV_KEY);
+      if (!n) { n = "PC-" + Math.random().toString(36).slice(2, 6).toUpperCase(); localStorage.setItem(DEV_KEY, n); }
+      return n;
+    } catch (e) { return "PC"; }
+  };
+  let libFail = false;
+
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:relative;display:inline-flex;align-items:center;margin-left:10px;font:13px system-ui,sans-serif;color:#ddd";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.style.cssText = "display:flex;align-items:center;gap:8px;max-width:210px;padding:3px 12px 3px 3px;background:transparent;color:#ddd;border:1px solid #444;border-radius:999px;cursor:pointer;font:inherit";
+  const av = document.createElement("span");
+  av.style.cssText = "position:relative;flex:none;width:26px;height:26px;border-radius:50%;background:#555;color:#111;display:grid;place-items:center";
+  const initial = document.createElement("b");
+  initial.style.cssText = "font-size:13px;line-height:1";
+  const dot = document.createElement("i");
+  dot.style.cssText = "position:absolute;right:-3px;bottom:-3px;width:10px;height:10px;border-radius:50%;border:2px solid #161616;background:#888";
+  av.append(initial, dot);
+  const nm = document.createElement("span");
+  nm.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+  btn.append(av, nm);
+  holder.appendChild(btn);
+
+  const menu = document.createElement("div");
+  menu.hidden = true;
+  menu.style.cssText = "position:fixed;width:260px;box-sizing:border-box;padding:14px;background:#1a1a1a;color:#ddd;border:1px solid #444;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:60;text-align:left;font:13px system-ui,sans-serif";
+  menu.innerHTML =
+    '<div style="font-size:11px;color:#8a8f94">Masuk sebagai</div>' +
+    '<div id="irm_mail" style="font-weight:600;word-break:break-all;margin:2px 0 10px"></div>' +
+    '<div style="font-size:11px;color:#8a8f94">Nama PC ini</div>' +
+    '<input id="irm_dev" maxlength="24" style="width:100%;box-sizing:border-box;margin:3px 0 10px;padding:6px 8px;border-radius:6px;border:1px solid #555;background:#111;color:#eee;font:inherit">' +
+    '<div id="irm_st" style="font-size:12px;color:#aaa;margin-bottom:12px"></div>' +
+    '<button type="button" id="irm_out" style="width:100%;padding:8px;border-radius:8px;border:1px solid #555;background:transparent;color:#ddd;cursor:pointer;font:inherit">Keluar</button>';
+  document.body.appendChild(menu);
+  const $m = id => menu.querySelector("#" + id);
+
+  // Pasang di kanan tombol BATCH EXPORT; kalau tidak ketemu, pakai pojok kanan atas layar.
+  const anchor = document.getElementById("expall");
+  if (anchor && anchor.parentNode) anchor.after(holder);
+  else { holder.style.cssText += ";position:fixed;right:12px;top:10px;z-index:50"; document.body.appendChild(holder); }
+
+  function openMenu() {
+    const r = btn.getBoundingClientRect();
+    menu.style.top = (r.bottom + 8) + "px";
+    menu.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+    menu.hidden = false;
+    refresh();
+  }
+  function closeMenu() { menu.hidden = true; }
+
   function refresh() {
     const n = getQ().length;
-    const pend = n ? ` · antre ${n}` : "";
-    if (!sb) { badge.textContent = "Log: memuat…" + pend; badge.style.borderColor = "#444"; return; }
-    if (user) {
-      badge.textContent = `Log aktif: ${(user.email || "").split("@")[0]}${pend}`;
-      badge.style.borderColor = lastErr ? "#c0563a" : "#3c9a5f";
-      badge.title = lastErr ? "Gagal mengirim: " + lastErr : "Klik untuk keluar";
-    } else {
-      badge.textContent = "Log: belum masuk (klik)" + pend;
-      badge.style.borderColor = "#ff7a1a";
-      badge.title = "Klik untuk masuk";
+    if (!sb) {
+      initial.textContent = "·"; nm.textContent = libFail ? "Tanpa log (offline)" : "Memuat…";
+      av.style.background = "#555"; dot.style.background = "#888"; btn.style.borderColor = "#444";
+      btn.title = ""; return;
     }
+    if (!user) {
+      initial.textContent = "?"; nm.textContent = "Belum masuk";
+      av.style.background = "#555"; dot.style.background = "#ff7a1a"; btn.style.borderColor = "#ff7a1a";
+      btn.title = "Klik untuk masuk"; closeMenu(); return;
+    }
+    const mail = user.email || "";
+    initial.textContent = (mail[0] || "?").toUpperCase();
+    nm.textContent = mail.split("@")[0];
+    av.style.background = "#ff7a1a"; btn.style.borderColor = "#444";
+    dot.style.background = lastErr ? "#d9534f" : n ? "#ff7a1a" : "#3c9a5f";
+    btn.title = mail + " · " + deviceName();
+    $m("irm_mail").textContent = mail;
+    const dv = $m("irm_dev");
+    if (document.activeElement !== dv) dv.value = deviceName();
+    $m("irm_st").textContent = lastErr ? "Gagal mengirim log: " + lastErr
+      : n ? `Log menunggu dikirim: ${n}` : "Log edit terkirim, semua aman.";
   }
 
-  badge.onclick = async () => {
+  btn.onclick = e => {
+    e.stopPropagation();
     if (!sb) return;
-    if (user) {
-      if (confirm("Keluar dari akun " + user.email + "?")) await sb.auth.signOut();
-    } else {
-      $$("irl_m").textContent = "";
-      dlg.showModal();
-    }
+    if (!user) { $$("irl_m").textContent = ""; dlg.showModal(); return; }
+    menu.hidden ? openMenu() : closeMenu();
+  };
+  document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) closeMenu(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+  window.addEventListener("resize", closeMenu);
+
+  // Ketikan di kolom teks tidak boleh menggeser foto (main.js memakai tombol panah).
+  const dev = $m("irm_dev");
+  [dev, dlg].forEach(el => el.addEventListener("keydown", e => e.stopPropagation()));
+  dev.addEventListener("keydown", e => { if (e.key === "Escape" || e.key === "Enter") { dev.blur(); closeMenu(); } });
+  dev.addEventListener("change", () => {
+    const v = dev.value.trim().slice(0, 24) || deviceName();
+    try { localStorage.setItem(DEV_KEY, v); } catch (e) {}
+    dev.value = v; refresh();
+  });
+  $m("irm_out").onclick = async () => {
+    if (!sb) return;
+    if (!confirm("Keluar dari akun " + (user && user.email) + "?\nFoto milik akun ini tetap tersimpan di PC ini dan muncul lagi saat kamu masuk.")) return;
+    closeMenu();
+    await sb.auth.signOut();
   };
   $$("irl_x").onclick = () => dlg.close();
   $$("irl_f").onsubmit = async e => {
@@ -98,7 +173,7 @@
   const lib = document.createElement("script");
   lib.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
   lib.onload = init;
-  lib.onerror = () => { badge.textContent = "Log: gagal memuat library"; };
+  lib.onerror = () => { libFail = true; refresh(); };
   document.head.appendChild(lib);
 
   async function flush() {
@@ -182,6 +257,7 @@
     if (seen.get(p.name) === sig) return;
     seen.set(p.name, sig);
     const features = await fingerprint(p);
+    features.device = deviceName();
     const q = getQ();
     q.push({ app_version: APP_VERSION, features, settings });
     setQ(q);
