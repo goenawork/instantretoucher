@@ -9,14 +9,14 @@ TR["lum_"+k]=`linear-gradient(90deg,#1a1a1a,${c} 50%,#f2f2f2)`;});
 const SECS=[
 ["Cahaya",1,[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1],["whites","Whites",-1,1],["blacks","Blacks",-1,1]]],
 ["Warna",1,[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]],
-["HSL · Hue",0,HSLC.map(([k,n])=>["hue_"+k,n,-1,1])],
-["HSL · Saturation",0,HSLC.map(([k,n])=>["sat_"+k,n,-1,1])],
-["HSL · Luminance",0,HSLC.map(([k,n])=>["lum_"+k,n,-1,1])],
+["Hue",0,HSLC.map(([k,n])=>["hue_"+k,n,-1,1]),"HSL"],
+["Saturation",0,HSLC.map(([k,n])=>["sat_"+k,n,-1,1]),"HSL"],
+["Luminance",0,HSLC.map(([k,n])=>["lum_"+k,n,-1,1]),"HSL"],
 ["Curves",0,[["cv_hi","Highlights",-1,1],["cv_li","Lights",-1,1],["cv_da","Darks",-1,1],["cv_sh","Shadows",-1,1]]],
 ["Efek",0,[["fine","Texture",-1,1],["clarity","Clarity",-1,1],["dehaze","Dehaze",-1,1],["vig","Vignette",-1,1],
 ["vmid","Midpoint",0,1,.5,1],["vround","Roundness",-1,1,0,1],["vfeather","Feather",0,1,.5,1],["vhi","Highlights",0,1,0,1],["grain","Grain",0,1],["gsize","Ukuran grain",0,1,.25,1]]],
-["Kulit",0,[["skin","Haluskan kulit",0,1],["keep","Pertahankan tekstur",0,1,.6]]],
-["Mata & mulut",0,[["eyes","Cerahkan mata",0,1],["teeth","Putihkan gigi",0,1]]]
+["Kulit",0,[["skin","Haluskan kulit",0,1],["keep","Pertahankan tekstur",0,1,.6]],"Retouch"],
+["Mata & mulut",0,[["eyes","Cerahkan mata",0,1],["teeth","Putihkan gigi",0,1]],"Retouch"]
 ];
 const IDS=SECS.flatMap(g=>g[2].map(r=>r[0]));
 const DEF={};SECS.forEach(g=>g[2].forEach(r=>DEF[r[0]]=r[4]||0));const zero=()=>({...DEF});
@@ -28,28 +28,67 @@ const RAW=/\.(cr2|cr3|crw|raf|nef|nrw|arw|srf|sr2|dng|orf|rw2|pef|srw|3fr|erf|mr
 const photos=[], wc=document.createElement("canvas"), cv=$("cv"), out=$("out"), panel=$("panel");
 let cur=null, idx=-1, bypass=false, busy=false, tex=null, seg=null, tok=0, mtex=null, mown=null, lm=null;
 /* ---------- Panel ---------- */
-SECS.forEach(([title,open,items])=>{
-const d=document.createElement("details");d.className="sec";d.open=!!open;
+const st=document.createElement("style");
+st.textContent=`.tabs{display:flex;gap:6px;margin:2px 0 10px}
+.tabs .tb{flex:1;padding:6px 4px;border-radius:6px;border:1px solid #3a3d40;background:transparent;color:#bbb;cursor:pointer;font:inherit;font-size:12px}
+.tabs .tb.on{background:#2a2d30;color:#fff;border-color:#ff7a1a}
+.sec.in{margin:6px 0 0}
+.row.hasSub>span:first-child{cursor:pointer}
+.row.hasSub>span:first-child::after{content:" \\25B8";opacity:.55;font-size:11px}
+.row.hasSub.open>span:first-child::after{content:" \\25BE"}`;
+document.head.appendChild(st);
+const resetItems=items=>{if(!cur)return;items.forEach(r=>{cur.s[r[0]]=r[4]||0;});syncUI();draw();};
+const mkSec=(title,open,cls)=>{
+const d=document.createElement("details");d.className="sec"+(cls?" "+cls:"");d.open=!!open;
 d.innerHTML=`<summary><span>${title}</span><button class="rs" title="Reset bagian ini" aria-label="Reset ${title}">&#10226;</button></summary><div class="body"></div>`;
-const body=d.querySelector(".body");
+return d;};
+/* Baris slider. Baris "sub" disembunyikan sampai slider induknya diklik (berlaku untuk semua yang punya sub-menu). */
+function addRows(body,items){
+let parent=null;
 items.forEach(([id,label,min,max,def=0,sub])=>{
 body.insertAdjacentHTML("beforeend",`<div class="row${sub?" sub":""}"><span>${label}</span><output id="o_${id}">${disp(id,def)}</output><input id="s_${id}" type="range" min="${min}" max="${max}" step="0.01" value="${def}" ${TR[id]?`class="grad" style="--tr:${TR[id]}"`:""} aria-label="${label}"></div>`);
-const sl=body.querySelector("#s_"+id);
+const row=body.lastElementChild,sl=row.querySelector("input");
+if(sub){row.style.display="none";if(parent){parent.classList.add("hasSub");parent._subs.push(row);}}
+else{parent=row;row._subs=[];
+const show=on=>{row.classList.toggle("open",on);row._subs.forEach(r=>{r.style.display=on?"":"none";});};
+row.querySelector("span").addEventListener("click",()=>{if(row._subs.length)show(!row.classList.contains("open"));});
+sl.addEventListener("pointerdown",()=>{if(row._subs.length)show(true);});}
 sl.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+sl.value;$("o_"+id).textContent=disp(id,+sl.value);
 if(["skin","teeth","eyes"].includes(id)&&+sl.value>0&&!cur.faces&&!busy)ensureFaces(cur).then(()=>draw());draw();});
 sl.addEventListener("dblclick",()=>{sl.value=def;sl.dispatchEvent(new Event("input"));});
+});}
+const MENUS={HSL:{tabs:true},Retouch:{}},menuEls={};
+SECS.forEach(([title,open,items,menu])=>{
+if(!menu){
+const d=mkSec(title,open);addRows(d.querySelector(".body"),items);
+d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(items);};
+panel.appendChild(d);return;}
+let m=menuEls[menu];
+if(!m){
+const d=mkSec(menu,0);m=menuEls[menu]={d,body:d.querySelector(".body"),items:[],panes:[],btns:[]};
+if(MENUS[menu].tabs){m.tabs=document.createElement("div");m.tabs.className="tabs";m.body.appendChild(m.tabs);}
+d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(m.items);};
+panel.appendChild(d);}
+m.items.push(...items);
+if(m.tabs){
+const pane=document.createElement("div"),btn=document.createElement("button"),first=!m.panes.length;
+btn.type="button";btn.className="tb"+(first?" on":"");btn.textContent=title;pane.style.display=first?"":"none";
+btn.onclick=()=>{m.btns.forEach(b=>b.classList.remove("on"));btn.classList.add("on");m.panes.forEach(x=>{x.style.display="none";});pane.style.display="";};
+m.tabs.appendChild(btn);m.btns.push(btn);m.panes.push(pane);m.body.appendChild(pane);addRows(pane,items);
+}else{
+const sd=mkSec(title,0,"in");addRows(sd.querySelector(".body"),items);
+sd.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(items);};
+m.body.appendChild(sd);}
 });
-d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();if(!cur)return;items.forEach(r=>{cur.s[r[0]]=r[4]||0;});syncUI();draw();};
-panel.appendChild(d);
-});
-panel.insertAdjacentHTML("beforeend",`
-<details class="sec"><summary><span>Kilau kacamata</span></summary><div class="body">
+menuEls.Retouch.body.insertAdjacentHTML("beforeend",`
+<details class="sec in"><summary><span>Kilau kacamata</span></summary><div class="body">
 <button id="gfix" class="w" disabled>Hapus kilau otomatis</button>
 <div class="row"><span>Ambang kilau (turunkan = lebih banyak)</span><output id="o_gt">0.88</output><input id="gthr" type="range" min="0.6" max="0.99" step="0.01" value="0.88" aria-label="Ambang kilau"></div>
 <button id="gbrush" class="w" disabled>Kuas kilau: mati</button>
 <div class="row"><span>Ukuran kuas</span><output id="o_gs">3</output><input id="gsize" type="range" min="0.5" max="10" step="0.5" value="3" aria-label="Ukuran kuas"></div>
 <button id="gclear" class="w" disabled>Batalkan perbaikan kilau</button>
-</div></details>
+</div></details>`);
+panel.insertAdjacentHTML("beforeend",`
 <details class="sec"><summary><span>Latar</span></summary><div class="body">
 <button id="rmbg" class="w" disabled>Pisahkan subjek (AI)</button>
 <button id="rmall" class="w" disabled>Pisahkan semua yang tercentang</button>

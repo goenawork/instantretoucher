@@ -7,7 +7,7 @@
 
   const SB_URL = "https://ohtrmsvxqxpobqrcuckb.supabase.co";
   const SB_KEY = "sb_publishable_smGnZcynxySp2ph1V2UNyA_-AbYqaYd"; // kunci publik, aman di web
-  const APP_VERSION = "log-1";
+  const APP_VERSION = "engine-2";
   const QKEY = "ir_log_queue";
 
   let sb = null, user = null, flushing = false, lastErr = "";

@@ -64,13 +64,19 @@ float tw=teeth*m.g*smoothstep(.25,.45,l0)*(1.-smoothstep(.06,.18,red));
 c=mix(c,mix(vec3(l0),c,.5)*(1.+.2*teeth),tw);
 c=mix(c,c*1.2+.03,eyes*m.b*smoothstep(.4,.75,l0));
 }
-c=pow(c,vec3(2.2))*pow(2.,exposure); c=pow(clamp(c,0.,8.),vec3(1./2.2));
+vec3 lin=pow(max(c,0.),vec3(2.2))*pow(2.,exposure);
+if(exposure>0.){vec3 kn=min(lin,.7)+.3*(1.-exp(-max(lin-.7,0.)/.3));lin=mix(lin,kn,clamp(exposure/2.,0.,1.));}
+c=pow(clamp(lin,0.,8.),vec3(1./2.2));
 c.r+=temp*.12; c.b-=temp*.12; c.g-=tint*.08; c.r+=tint*.04; c.b+=tint*.04;
 float l=dot(c,LW);
-float sh=pow(1.-clamp(l,0.,1.),2.), hi=pow(clamp(l,0.,1.),2.);
-c+=shadows*.3*sh*(1.-l*.5); c+=highlights*.3*hi;
-c+=whites*.2*smoothstep(.55,1.,l); c+=blacks*.2*(1.-smoothstep(0.,.45,l));
-c=(c-.5)*(1.+contrast)+.5;
+if(contrast>0.){vec3 cs=clamp(c,0.,1.);cs=cs*cs*cs*(cs*(cs*6.-15.)+10.);c=mix(c,cs,contrast);}
+else c=(c-.5)*(1.+contrast*.6)+.5;
+float lj=dot(c,LW);
+float hm=smoothstep(.4,1.,lj), sm=smoothstep(.02,.3,lj)*(1.-smoothstep(.3,.8,lj));
+if(highlights<0.) c*=1.+highlights*.32*lj*lj; else c=1.-(1.-c)*(1.-highlights*.5*hm);
+if(shadows>0.) c=1.-(1.-c)*(1.-shadows*.3*sm); else c*=1.+shadows*.5*sm;
+float bpt=-blacks*.12, wpt=1.-whites*.12;
+c=(c-bpt)/max(wpt-bpt,.2);
 float lm0=dot(c0,LW);
 if(abs(fine)>.003) c+=(lm0-dot(blurAt(.0015),LW))*fine*1.5;
 if(abs(clarity)>.003) c+=(lm0-dot(blurAt(.012),LW))*clarity*1.3*clamp(1.-abs(l-.5)*1.6,0.,1.);
