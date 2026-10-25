@@ -40,10 +40,10 @@
 
   const metaOf = p => ({
     id: p._id, seq: p._seq, name: p.name, thumb: p.thumb, s: p.s, rot: p.rot, on: p.on,
-    w0: p.w0, h0: p.h0, raw: p.raw, glare: { auto: p.glare.auto, thr: p.glare.thr }, pc: p.pc || null
+    w0: p.w0, h0: p.h0, raw: p.raw, glare: { auto: p.glare.auto, thr: p.glare.thr }, pc: p.pc || null, crop: p.crop || null
   });
   // Penanda perubahan: kalau berubah, data foto disimpan ulang.
-  const sigOf = p => JSON.stringify([p.s, p.rot, p.on, p.glare && p.glare.auto, p.glare && p.glare.thr, p.pc || null]);
+  const sigOf = p => JSON.stringify([p.s, p.rot, p.on, p.glare && p.glare.auto, p.glare && p.glare.thr, p.pc || null, p.crop || null]);
 
   function savePhoto(p, withBlob) {
     return tx(["meta", "blobs"], "readwrite", t => {
@@ -68,7 +68,7 @@
       const p = {
         name: m.name, blob, thumb: m.thumb,
         s: { ...zero(), ...(m.s || {}) },
-        rot: m.rot || 0, pc: Array.isArray(m.pc) ? m.pc : null, mask: null, on: m.on !== false, w0: m.w0, h0: m.h0, raw: !!m.raw,
+        rot: m.rot || 0, pc: Array.isArray(m.pc) ? m.pc : null, crop: m.crop && typeof m.crop === "object" ? m.crop : null, mask: null, on: m.on !== false, w0: m.w0, h0: m.h0, raw: !!m.raw,
         glare: { auto: !!(m.glare && m.glare.auto), thr: (m.glare && m.glare.thr) || 0.88, strokes: [] },
         _id: m.id, _seq: m.seq
       };

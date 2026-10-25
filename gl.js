@@ -156,11 +156,19 @@ if(p===cur)drawCurve(p);
 async function show(p,cap,tk){
 const bm=await createImageBitmap(p.blob,{imageOrientation:"from-image"});
 if(tk!==undefined&&tk!==tok){bm.close();return;}
-const odd=p.rot%2, sw=odd?bm.height:bm.width, sh=odd?bm.width:bm.height; p.sw=sw; p.sh=sh;
-const k=Math.min(1,Math.min(cap,MAXT)/Math.max(sw,sh));
+const odd=p.rot%2, sw=odd?bm.height:bm.width, sh=odd?bm.width:bm.height;
+/* Crop: p.crop = {x,y,w,h} dalam 0..1 terhadap foto penuh yang sudah diputar. Saat mengedit crop (pratinjau), tampilkan foto penuh. */
+const cr=(p._cropEdit&&cap<1e4)?null:p.crop;
+const ew=cr?cr.w*sw:sw, eh=cr?cr.h*sh:sh; p.sw=Math.round(ew); p.sh=Math.round(eh);
+const k=Math.min(1,Math.min(cap,MAXT)/Math.max(ew,eh));
 wc.width=Math.round(sw*k); wc.height=Math.round(sh*k);
 const c=wc.getContext("2d"); c.translate(wc.width/2,wc.height/2); c.rotate(p.rot*Math.PI/2);
 c.drawImage(bm,-bm.width*k/2,-bm.height*k/2,bm.width*k,bm.height*k); bm.close();
+if(cr){
+const cx=Math.round(cr.x*wc.width),cy=Math.round(cr.y*wc.height),cw=Math.max(1,Math.min(wc.width-cx,Math.round(cr.w*wc.width))),ch=Math.max(1,Math.min(wc.height-cy,Math.round(cr.h*wc.height)));
+const tc=document.createElement("canvas");tc.width=cw;tc.height=ch;tc.getContext("2d").drawImage(wc,cx,cy,cw,ch,0,0,cw,ch);
+wc.width=cw;wc.height=ch;wc.getContext("2d").drawImage(tc,0,0);
+}
 const G=p.glare.auto||p.glare.strokes.length;
 if(G||p.s.skin>0||p.s.teeth>0||p.s.eyes>0){await ensureFaces(p);if(tk!==undefined&&tk!==tok)return;}
 if(G)applyGlare(p);

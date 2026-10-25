@@ -1,7 +1,7 @@
 /* InstantManiaRetoucher - Undo / Redo per foto.
    - Ctrl+Z = Undo, Ctrl+Y atau Ctrl+Shift+Z = Redo (sama seperti Photoshop).
    - Satu langkah riwayat = satu "sesi" perubahan (menarik slider sampai berhenti, menggeser titik kurva, Reset, dll).
-   - Yang tercatat: semua slider, kurva titik, dan pengaturan kilau otomatis.
+   - Yang tercatat: semua slider, kurva titik, crop, dan pengaturan kilau otomatis.
    - Belum tercatat: rotasi, hasil "Pisahkan subjek", dan goresan kuas kilau. */
 (function () {
   "use strict";
@@ -11,7 +11,7 @@
   let applying = false;
 
   const snap = p => JSON.stringify({
-    s: p.s, pc: p.pc || null,
+    s: p.s, pc: p.pc || null, c: p.crop || null,
     g: [!!(p.glare && p.glare.auto), p.glare ? p.glare.thr : 0.88]
   });
 
@@ -43,13 +43,18 @@
     const d = JSON.parse(h.st[to]);
     applying = true;
     try {
+      const cropChanged = JSON.stringify(cur.crop || null) !== JSON.stringify(d.c || null);
       const glareChanged = !!cur.glare.auto !== d.g[0] || cur.glare.thr !== d.g[1];
       cur.s = { ...zero(), ...d.s };
       cur.pc = d.pc ? d.pc.map(a => [a[0], a[1]]) : null;
       cur.glare.auto = d.g[0]; cur.glare.thr = d.g[1];
+      if (cropChanged) {
+        cur.crop = d.c || null;
+        if (window.irCrop) window.irCrop.invalidate(cur);
+      }
       h.i = to; h.last = h.st[to]; h.t = 0;
       syncUI();
-      if (glareChanged) await show(cur, PREV); else draw();
+      if (glareChanged || cropChanged) { await show(cur, PREV); if (cropChanged) fitView(); } else draw();
     } finally { applying = false; buttons(); }
   }
 
