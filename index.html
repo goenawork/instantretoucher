@@ -9,26 +9,26 @@
 <body>
 <header>
   <h1>InstantMania<span style="color:var(--accent)">Retoucher</span></h1>
-  <label class="btn">Buka foto<input id="file" type="file" multiple hidden accept="image/*,.cr2,.cr3,.crw,.raf,.nef,.nrw,.arw,.sr2,.srf,.dng,.orf,.rw2,.pef,.srw,.3fr,.erf,.mrw,.kdc,.dcr,.raw"></label>
-  <button id="rot" disabled>Putar</button>
-  <button id="cmp" disabled>Tahan untuk lihat asli</button>
+  <label class="btn">Open Photo<input id="file" type="file" multiple hidden accept="image/*,.cr2,.cr3,.crw,.raf,.nef,.nrw,.arw,.sr2,.srf,.dng,.orf,.rw2,.pef,.srw,.3fr,.erf,.mrw,.kdc,.dcr,.raw"></label>
+  <button id="rot" disabled>Rotate</button>
+  <button id="cmp" disabled>Hold to view original</button>
   <button id="reset" disabled>Reset</button>
-  <select id="fmt" aria-label="Format ekspor"><option value="png">PNG (lossless)</option><option value="jpg">JPG kualitas 100%</option></select>
+  <select id="fmt" aria-label="Format ekspor"><option value="png">PNG (lossless)</option><option value="jpg">JPG 100%</option></select>
   <button id="save" disabled>EXPORT</button>
   <button id="expall" class="primary" disabled>BATCH EXPORT</button>
 </header>
 <main>
   <div id="stage">
     <div id="view">
-      <div id="empty">Tarik foto ke sini atau klik Buka foto.<br>Bisa banyak sekaligus: JPG, PNG, WebP, dan RAW (CR2, CR3, RAF, NEF, ARW, DNG, dll).<br>Semua diproses di browser, tidak ada yang diunggah.</div>
+      <div id="empty">Drag a photo here or click Open photo.<br>JPG, PNG, WebP, dan RAW (CR2, CR3, RAF, NEF, ARW, DNG, dll).<br>Everything is processed in the browser, nothing is uploaded.</div>
       <div id="zw"><canvas id="cv"></canvas><canvas id="out"></canvas><canvas id="ov"></canvas></div>
     </div>
-    <div id="bar"><span id="cnt">0 foto</span><span id="zl" title="Scroll untuk zoom, seret untuk geser, klik dua kali untuk Fit"></span><button id="zfit" title="Pas ke layar">Fit</button><button id="z100" title="Ukuran piksel asli">100%</button><button id="syncb" disabled>Terapkan ke foto tercentang</button><button id="chk" disabled>Centang semua / kosongkan</button></div>
+    <div id="bar"><span id="cnt">0 foto</span><span id="zl" title="Scroll to zoom, drag to slide, double-click to Fit"></span><button id="zfit" title="Pas ke layar">Fit</button><button id="z100" title="Ukuran piksel asli">100%</button><button id="syncb" disabled>Terapkan ke foto tercentang</button><button id="chk" disabled>Centang semua / kosongkan</button></div>
     <div id="strip"></div>
   </div>
   <aside id="panel"></aside>
 </main>
-<div id="msg">Siap.</div>
+<div id="msg">Ready</div>
 
 <script src="core.js?v=5"></script>
 <script src="shader.js?v=6"></script>
