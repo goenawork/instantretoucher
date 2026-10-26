@@ -41,7 +41,7 @@
   };
   function invalidate(p) {
     const had = !!p.mask;
-    p.mask = null; p.faces = null; p.fmask = null; p._fp = null; p.glare.strokes = [];
+    p.mask = null; p.mst = []; p._fa = p._fk = p._ref = null; p.faces = null; p.fmask = null; p._fp = null; p.glare.strokes = [];
     if (p === cur) $("bgopts").hidden = true;
     return had;
   }
