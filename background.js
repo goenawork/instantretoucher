@@ -127,7 +127,7 @@ $("bgopts").insertAdjacentHTML("beforeend",`
 <div class="row"><span>Ukuran kuas</span><output id="o_bsize">4</output><input id="bsize" type="range" min="0.5" max="20" step="0.5" value="4" aria-label="Ukuran kuas"></div>
 <button id="bundo" class="w">Batalkan goresan terakhir</button>
 <button id="bclr" class="w">Hapus semua goresan</button>
-<div style="font-size:11px;line-height:1.35;color:var(--mute);margin:2px 0 8px">Pulihkan = kembalikan bagian subjek yang ikut terhapus. Hapus = buang sisa latar. Perbesar foto dengan scroll untuk goresan yang presisi.</div>`);
+<div style="font-size:11px;line-height:1.35;color:var(--mute);margin:2px 0 8px">Pulihkan = kembalikan bagian subjek yang ikut terhapus. Hapus = buang sisa latar. Perbesar foto dengan scroll untuk goresan yang presisi. Tombol <b>[</b> mengecilkan kuas, <b>]</b> membesarkan.</div>`);
 ["bsharp","bshift","bcont"].forEach(id=>{
 const el=$(id),key={bsharp:"sharp",bshift:"shift",bcont:"cont"}[id];paint(el);
 el.addEventListener("input",()=>{BG[key]=+el.value;$("o_"+id).textContent=Math.round(+el.value*100);paint(el);sched();});
@@ -205,8 +205,9 @@ if(e.button!==0||!BG.tool||!cur||!cur.mask)return;
 e.preventDefault();bov.setPointerCapture(e.pointerId);
 BG.cur={m:BG.tool,r:+$("bsize").value/200,pts:[bpt(e)]};live(BG.cur,0);
 });
+let lastE=null;
 bov.addEventListener("pointermove",e=>{
-ring(e);
+lastE=e;ring(e);
 if(!BG.cur)return;
 BG.cur.pts.push(bpt(e));live(BG.cur,BG.cur.pts.length-2);
 });
@@ -216,10 +217,28 @@ bov.addEventListener("pointerleave",()=>{if(!BG.cur)ring(null);});
 if(!BG.cur||!cur)return;
 (cur.mst||(cur.mst=[])).push(BG.cur);BG.cur=null;
 cur._fk=aKey(cur,cv.width,cv.height);   // goresan sudah tergambar langsung, tidak perlu bangun ulang
+if(window.irHistoryCommit)window.irHistoryCommit();
 msg("Goresan ditambahkan. Ctrl+Z untuk membatalkan.");
 }));
-$("bundo").onclick=()=>{if(cur&&cur.mst&&cur.mst.length){cur.mst.pop();cur._fk=null;draw();msg("Goresan terakhir dibatalkan.");}};
-$("bclr").onclick=()=>{if(cur&&cur.mst&&cur.mst.length){cur.mst=[];cur._fk=null;draw();msg("Semua goresan dihapus.");}};
+$("bundo").onclick=()=>{if(cur&&cur.mst&&cur.mst.length){cur.mst.pop();cur._fk=null;draw();if(window.irHistoryCommit)window.irHistoryCommit();msg("Goresan terakhir dibatalkan.");}};
+$("bclr").onclick=()=>{if(cur&&cur.mst&&cur.mst.length){cur.mst=[];cur._fk=null;draw();if(window.irHistoryCommit)window.irHistoryCommit();msg("Semua goresan dihapus.");}};
+/* Tombol [ mengecilkan dan ] membesarkan kuas, seperti di Photoshop. */
+function nudgeSize(dir){
+const el=BG.tool?$("bsize"):(typeof brush!=="undefined"&&brush?$("gsize"):null);
+if(!el)return false;
+const v=+el.value,st=v<2?.5:v<10?1:2,nv=Math.min(+el.max,Math.max(+el.min,v+dir*st));
+if(nv===v)return true;
+el.value=nv;el.dispatchEvent(new Event("input",{bubbles:true}));
+if(BG.tool)ring(lastE);
+return true;
+}
+addEventListener("keydown",e=>{
+if(e.ctrlKey||e.metaKey||e.altKey)return;
+const t=e.target;
+if(t&&(t.tagName==="TEXTAREA"||t.tagName==="SELECT"||(t.tagName==="INPUT"&&!/^(range|checkbox|color|button)$/.test(t.type))))return;
+const dir=e.code==="BracketLeft"?-1:e.code==="BracketRight"?1:0;
+if(dir&&nudgeSize(dir))e.preventDefault();
+});
 addEventListener("resize",()=>{if(BG.tool)placeBov();});
 setInterval(()=>{
 photos.forEach(p=>{if(p!==cur&&p._fa){p._fa=p._fk=p._ref=null;}});
