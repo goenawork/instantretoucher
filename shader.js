@@ -9,6 +9,15 @@ uniform sampler2D ct;uniform float cvOn;
 uniform float hue_red,hue_orange,hue_yellow,hue_green,hue_aqua,hue_blue,hue_purple,hue_magenta;
 uniform float sat_red,sat_orange,sat_yellow,sat_green,sat_aqua,sat_blue,sat_purple,sat_magenta;
 uniform float lum_red,lum_orange,lum_yellow,lum_green,lum_aqua,lum_blue,lum_purple,lum_magenta;
+uniform float sc_red_c,sc_red_m,sc_red_y,sc_red_k;
+uniform float sc_yellow_c,sc_yellow_m,sc_yellow_y,sc_yellow_k;
+uniform float sc_green_c,sc_green_m,sc_green_y,sc_green_k;
+uniform float sc_cyan_c,sc_cyan_m,sc_cyan_y,sc_cyan_k;
+uniform float sc_blue_c,sc_blue_m,sc_blue_y,sc_blue_k;
+uniform float sc_magenta_c,sc_magenta_m,sc_magenta_y,sc_magenta_k;
+uniform float sc_white_c,sc_white_m,sc_white_y,sc_white_k;
+uniform float sc_neutral_c,sc_neutral_m,sc_neutral_y,sc_neutral_k;
+uniform float sc_black_c,sc_black_m,sc_black_y,sc_black_k;
 const vec3 LW=vec3(.2126,.7152,.0722);
 vec3 blurAt(float rad){
 vec3 s=vec3(0.);
@@ -108,6 +117,23 @@ hv.y=clamp(hv.y*(1.+dS*cwt),0.,1.);
 c=hsv2rgb(hv);
 float dl=dL*cwt;
 c=dl>=0.?mix(c,vec3(1.),dl*.5):c*(1.+dl*.7);
+}
+float scOn=abs(sc_red_c)+abs(sc_red_m)+abs(sc_red_y)+abs(sc_red_k)+abs(sc_yellow_c)+abs(sc_yellow_m)+abs(sc_yellow_y)+abs(sc_yellow_k)+abs(sc_green_c)+abs(sc_green_m)+abs(sc_green_y)+abs(sc_green_k)+abs(sc_cyan_c)+abs(sc_cyan_m)+abs(sc_cyan_y)+abs(sc_cyan_k)+abs(sc_blue_c)+abs(sc_blue_m)+abs(sc_blue_y)+abs(sc_blue_k)+abs(sc_magenta_c)+abs(sc_magenta_m)+abs(sc_magenta_y)+abs(sc_magenta_k)+abs(sc_white_c)+abs(sc_white_m)+abs(sc_white_y)+abs(sc_white_k)+abs(sc_neutral_c)+abs(sc_neutral_m)+abs(sc_neutral_y)+abs(sc_neutral_k)+abs(sc_black_c)+abs(sc_black_m)+abs(sc_black_y)+abs(sc_black_k);
+if(scOn>.003){
+vec3 q=clamp(c,0.,1.);
+float qx=max(q.r,max(q.g,q.b)), qn=min(q.r,min(q.g,q.b)), qc=qx-qn;
+float W0=max(q.r-max(q.g,q.b),0.), W1=max(min(q.r,q.g)-q.b,0.), W2=max(q.g-max(q.r,q.b),0.);
+float W3=max(min(q.g,q.b)-q.r,0.), W4=max(q.b-max(q.r,q.g),0.), W5=max(min(q.r,q.b)-q.g,0.);
+float W6=clamp((qn-.35)/.65,0.,1.), W8=clamp((.65-qx)/.65,0.,1.);
+float W7=clamp(1.-abs(qx+qn-1.),0.,1.)*(1.-qc)*(1.-qc)*(1.-qc);
+float aC=W0*sc_red_c+W1*sc_yellow_c+W2*sc_green_c+W3*sc_cyan_c+W4*sc_blue_c+W5*sc_magenta_c+W6*sc_white_c+W7*sc_neutral_c+W8*sc_black_c, aM=W0*sc_red_m+W1*sc_yellow_m+W2*sc_green_m+W3*sc_cyan_m+W4*sc_blue_m+W5*sc_magenta_m+W6*sc_white_m+W7*sc_neutral_m+W8*sc_black_m, aY=W0*sc_red_y+W1*sc_yellow_y+W2*sc_green_y+W3*sc_cyan_y+W4*sc_blue_y+W5*sc_magenta_y+W6*sc_white_y+W7*sc_neutral_y+W8*sc_black_y, aK=W0*sc_red_k+W1*sc_yellow_k+W2*sc_green_k+W3*sc_cyan_k+W4*sc_blue_k+W5*sc_magenta_k+W6*sc_white_k+W7*sc_neutral_k+W8*sc_black_k;
+vec3 ink=1.-q, ad=vec3(aC,aM,aY);
+vec3 pos=max(ad,0.), neg=min(ad,0.);
+ink=clamp(ink*(1.+neg)+(1.-ink)*pos*(.25+.75*ink),0.,1.);
+q=1.-ink;
+float kk=aK*.5;
+q*=kk>0.?1.-kk:1./(1.+kk);
+c=clamp(q,0.,1.);
 }
 if(abs(vig)>.003){
 vec2 q=(v-.5)*2.; float rd=max(vround,0.);
