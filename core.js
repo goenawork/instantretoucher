@@ -6,17 +6,22 @@ HSLC.forEach(([k,,c],i)=>{const a=HSLC[(i+7)%8][2],b=HSLC[(i+1)%8][2];
 TR["hue_"+k]=`linear-gradient(90deg,${a},${c} 50%,${b})`;
 TR["sat_"+k]=`linear-gradient(90deg,#77726c,${c})`;
 TR["lum_"+k]=`linear-gradient(90deg,#1a1a1a,${c} 50%,#f2f2f2)`;});
+/* Selective Color: 9 rentang warna x 4 slider (Cyan, Magenta, Yellow, Black) */
+const SCR=[["red","Red","#ff3b30"],["yellow","Yellow","#ffd60a"],["green","Green","#30d158"],["cyan","Cyan","#2fd5c8"],["blue","Blue","#0a84ff"],["magenta","Magenta","#e0399e"],["white","White","#f2f2f2"],["neutral","Neutral","#8e8e93"],["black","Black","#1a1a1a"]];
+const SCI=[["c","Cyan","linear-gradient(90deg,#ff5a52,#8d8a86 50%,#27d0d0)"],["m","Magenta","linear-gradient(90deg,#30d158,#8d8a86 50%,#e03aa8)"],["y","Yellow","linear-gradient(90deg,#4d6bff,#8d8a86 50%,#ffd60a)"],["k","Black","linear-gradient(90deg,#f2f2f2,#8d8a86 50%,#111)"]];
+SCR.forEach(([k])=>SCI.forEach(([i,,g])=>{TR["sc_"+k+"_"+i]=g;}));
 const SECS=[
-["Light",1,[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1],["whites","Whites",-1,1],["blacks","Blacks",-1,1]]],
-["Color",1,[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]],
+["Cahaya",1,[["exposure","Exposure",-3,3],["contrast","Contrast",-1,1],["highlights","Highlights",-1,1],["shadows","Shadows",-1,1],["whites","Whites",-1,1],["blacks","Blacks",-1,1]]],
+["Warna",1,[["temp","Temperature",-1,1],["tint","Tint",-1,1],["vibrance","Vibrance",-1,1],["sat","Saturation",-1,1]]],
 ["Hue",0,HSLC.map(([k,n])=>["hue_"+k,n,-1,1]),"HSL"],
 ["Saturation",0,HSLC.map(([k,n])=>["sat_"+k,n,-1,1]),"HSL"],
 ["Luminance",0,HSLC.map(([k,n])=>["lum_"+k,n,-1,1]),"HSL"],
+...SCR.map(([k,n,c])=>[n,0,SCI.map(([i,l])=>["sc_"+k+"_"+i,l,-1,1]),"Selective Color",c]),
 ["Curves",0,[["cv_hi","Highlights",-1,1],["cv_li","Lights",-1,1],["cv_da","Darks",-1,1],["cv_sh","Shadows",-1,1]]],
-["Effect",0,[["fine","Texture",-1,1],["clarity","Clarity",-1,1],["dehaze","Dehaze",-1,1],["vig","Vignette",-1,1],
-["vmid","Midpoint",0,1,.5,1],["vround","Roundness",-1,1,0,1],["vfeather","Feather",0,1,.5,1],["vhi","Highlights",0,1,0,1],["grain","Grain",0,1],["gsize","Grain size",0,1,.25,1]]],
-["Skin",0,[["skin","Soft Skin",0,1],["keep","Keep Texture",0,1,.6]],"Retouch"],
-["Eye & Mouth",0,[["eyes","Brighten eyes",0,1],["teeth","Whiten teeth",0,1]],"Retouch"]
+["Efek",0,[["fine","Texture",-1,1],["clarity","Clarity",-1,1],["dehaze","Dehaze",-1,1],["vig","Vignette",-1,1],
+["vmid","Midpoint",0,1,.5,1],["vround","Roundness",-1,1,0,1],["vfeather","Feather",0,1,.5,1],["vhi","Highlights",0,1,0,1],["grain","Grain",0,1],["gsize","Ukuran grain",0,1,.25,1]]],
+["Kulit",0,[["skin","Haluskan kulit",0,1],["keep","Pertahankan tekstur",0,1,.6]],"Retouch"],
+["Mata & mulut",0,[["eyes","Cerahkan mata",0,1],["teeth","Putihkan gigi",0,1]],"Retouch"]
 ];
 const IDS=SECS.flatMap(g=>g[2].map(r=>r[0]));
 const DEF={};SECS.forEach(g=>g[2].forEach(r=>DEF[r[0]]=r[4]||0));const zero=()=>({...DEF});
@@ -32,6 +37,10 @@ const st=document.createElement("style");
 st.textContent=`.tabs{display:flex;gap:6px;margin:2px 0 10px}
 .tabs .tb{flex:1;padding:6px 4px;border-radius:6px;border:1px solid #3a3d40;background:transparent;color:#bbb;cursor:pointer;font:inherit;font-size:12px}
 .tabs .tb.on{background:#2a2d30;color:#fff;border-color:#ff7a1a}
+.tabs.dots{flex-wrap:wrap;gap:8px}
+.tabs.dots .tb{flex:none;width:22px;height:22px;padding:0;border-radius:50%;border:1px solid #555}
+.tabs.dots .tb.on{box-shadow:0 0 0 2px #1b1b1b,0 0 0 4px #ff7a1a;border-color:#fff}
+.scn{font-size:12px;color:#8a8f94;margin:2px 0 6px}
 .sec.in{margin:6px 0 0}
 .row.hasSub>span:first-child{cursor:pointer}
 .row.hasSub>span:first-child::after{content:" \\25B8";opacity:.55;font-size:11px}
@@ -40,7 +49,7 @@ document.head.appendChild(st);
 const resetItems=items=>{if(!cur)return;items.forEach(r=>{cur.s[r[0]]=r[4]||0;});syncUI();draw();};
 const mkSec=(title,open,cls)=>{
 const d=document.createElement("details");d.className="sec"+(cls?" "+cls:"");d.open=!!open;
-d.innerHTML=`<summary><span>${title}</span><button class="rs" title="Reset this section" aria-label="Reset ${title}">&#10226;</button></summary><div class="body"></div>`;
+d.innerHTML=`<summary><span>${title}</span><button class="rs" title="Reset bagian ini" aria-label="Reset ${title}">&#10226;</button></summary><div class="body"></div>`;
 return d;};
 /* Baris slider. Baris "sub" disembunyikan sampai slider induknya diklik (berlaku untuk semua yang punya sub-menu). */
 function addRows(body,items){
@@ -57,8 +66,8 @@ sl.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+sl.value;$("o_"+id).t
 if(["skin","teeth","eyes"].includes(id)&&+sl.value>0&&!cur.faces&&!busy)ensureFaces(cur).then(()=>draw());draw();});
 sl.addEventListener("dblclick",()=>{sl.value=def;sl.dispatchEvent(new Event("input"));});
 });}
-const MENUS={HSL:{tabs:true},Retouch:{}},menuEls={};
-SECS.forEach(([title,open,items,menu])=>{
+const MENUS={HSL:{tabs:true},"Selective Color":{tabs:true,dots:true},Retouch:{}},menuEls={};
+SECS.forEach(([title,open,items,menu,color])=>{
 if(!menu){
 const d=mkSec(title,open);addRows(d.querySelector(".body"),items);
 d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(items);};
@@ -66,13 +75,14 @@ panel.appendChild(d);return;}
 let m=menuEls[menu];
 if(!m){
 const d=mkSec(menu,0);m=menuEls[menu]={d,body:d.querySelector(".body"),items:[],panes:[],btns:[]};
-if(MENUS[menu].tabs){m.tabs=document.createElement("div");m.tabs.className="tabs";m.body.appendChild(m.tabs);}
+if(MENUS[menu].tabs){m.tabs=document.createElement("div");m.tabs.className="tabs"+(MENUS[menu].dots?" dots":"");m.body.appendChild(m.tabs);}
 d.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(m.items);};
 panel.appendChild(d);}
 m.items.push(...items);
 if(m.tabs){
 const pane=document.createElement("div"),btn=document.createElement("button"),first=!m.panes.length;
-btn.type="button";btn.className="tb"+(first?" on":"");btn.textContent=title;pane.style.display=first?"":"none";
+btn.type="button";btn.className="tb"+(first?" on":"");pane.style.display=first?"":"none";
+if(MENUS[menu].dots){btn.style.background=color;btn.title=title;btn.setAttribute("aria-label",title);pane.insertAdjacentHTML("afterbegin",`<div class="scn">${title}</div>`);}else btn.textContent=title;
 btn.onclick=()=>{m.btns.forEach(b=>b.classList.remove("on"));btn.classList.add("on");m.panes.forEach(x=>{x.style.display="none";});pane.style.display="";};
 m.tabs.appendChild(btn);m.btns.push(btn);m.panes.push(pane);m.body.appendChild(pane);addRows(pane,items);
 }else{
@@ -81,25 +91,25 @@ sd.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();reset
 m.body.appendChild(sd);}
 });
 menuEls.Retouch.body.insertAdjacentHTML("beforeend",`
-<details class="sec in"><summary><span>Glint of glasses</span></summary><div class="body">
-<button id="gfix" class="w" disabled>Automatic glare removal</button>
-<div class="row"><span>Luminance threshold (lower = more)</span><output id="o_gt">0.88</output><input id="gthr" type="range" min="0.6" max="0.99" step="0.01" value="0.88" aria-label="Ambang kilau"></div>
-<button id="gbrush" class="w" disabled>Gloss brush: off</button>
-<div class="row"><span>Brush size</span><output id="o_gs">3</output><input id="gsize" type="range" min="0.5" max="10" step="0.5" value="3" aria-label="Brush size"></div>
-<button id="gclear" class="w" disabled>Cancel gloss correction</button>
+<details class="sec in"><summary><span>Kilau kacamata</span></summary><div class="body">
+<button id="gfix" class="w" disabled>Hapus kilau otomatis</button>
+<div class="row"><span>Ambang kilau (turunkan = lebih banyak)</span><output id="o_gt">0.88</output><input id="gthr" type="range" min="0.6" max="0.99" step="0.01" value="0.88" aria-label="Ambang kilau"></div>
+<button id="gbrush" class="w" disabled>Kuas kilau: mati</button>
+<div class="row"><span>Ukuran kuas</span><output id="o_gs">3</output><input id="gsize" type="range" min="0.5" max="10" step="0.5" value="3" aria-label="Ukuran kuas"></div>
+<button id="gclear" class="w" disabled>Batalkan perbaikan kilau</button>
 </div></details>`);
 panel.insertAdjacentHTML("beforeend",`
-<details class="sec"><summary><span>Background</span></summary><div class="body">
-<button id="rmbg" class="w" disabled>Remove Background (AI)</button>
-<button id="rmall" class="w" disabled>Removeall checked</button>
+<details class="sec"><summary><span>Latar</span></summary><div class="body">
+<button id="rmbg" class="w" disabled>Pisahkan subjek (AI)</button>
+<button id="rmall" class="w" disabled>Pisahkan semua yang tercentang</button>
 <div id="bgopts" hidden>
-<div class="field"><select id="bgmode" aria-label="Background Type">
-<option value="transparent">Transparant</option><option value="color">Color</option>
-<option value="image">Gambar</option><option value="original">Original Background</option></select>
-<input id="bgcolor" type="color" value="#ffffff" aria-label="Color Background">
-<label class="btn">Images<input id="bgimg" type="file" accept="image/*" hidden></label></div>
-<div class="row"><span>Smooth the edges</span><output id="o_f">1</output>
-<input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Smooth the edges"></div>
+<div class="field"><select id="bgmode" aria-label="Jenis latar">
+<option value="transparent">Transparan</option><option value="color">Warna</option>
+<option value="image">Gambar</option><option value="original">Latar asli</option></select>
+<input id="bgcolor" type="color" value="#ffffff" aria-label="Warna latar">
+<label class="btn">Gambar<input id="bgimg" type="file" accept="image/*" hidden></label></div>
+<div class="row"><span>Haluskan tepi</span><output id="o_f">1</output>
+<input id="feather" type="range" min="0" max="8" step="0.5" value="1" aria-label="Haluskan tepi"></div>
 </div>
 </div></details>`);
 document.querySelectorAll(".row input[type=range]").forEach(paint);
