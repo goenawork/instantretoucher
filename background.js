@@ -8,7 +8,7 @@
    Hasil akhir dibuat di ukuran tampilan atau ekspor lalu disimpan di p._fa agar menggeser slider warna tetap ringan. */
 (function(){
 let bgImg=null;
-const BG={sharp:.7,shift:0,cont:.25,tool:null,cur:null};
+const BG={sharp:.7,shift:-0.35,cont:.5,tool:null,cur:null};
 const tcv=document.createElement("canvas");   // kanvas sementara, dipakai ulang
 
 /* ---------- Guided filter (pemandu abu-abu) ---------- */
@@ -69,29 +69,38 @@ g.beginPath();s.pts.forEach((q,i)=>{const X=q[0]*W,Y=q[1]*H;i?g.lineTo(X,Y):g.mo
 if(s.pts.length===1)g.lineTo(s.pts[0][0]*W+.01,s.pts[0][1]*H);
 g.stroke();g.globalCompositeOperation="source-over";
 }
+   
 const aKey=(p,W,H)=>[W,H,BG.sharp,BG.shift,BG.cont,$("feather").value,(p.mst||[]).length,(p.mst||[]).reduce((a,s)=>a+s.pts.length,0)].join();
+
 function alphaCanvas(p,W,H){
-const key=aKey(p,W,H);
-if(p._fa&&p._fk===key&&p._fa.width===W&&p._fa.height===H)return p._fa;
-const R=getRef(p,W,H),n=W*H;
-if(!p._fa)p._fa=document.createElement("canvas");
-const A=p._fa;A.width=W;A.height=H;
-const g=A.getContext("2d"),img=g.createImageData(W,H),D=img.data;
-const s=BG.sharp,t=.5-BG.shift*.35,hw=.5-.45*BG.cont,lo=t-hw,inv=1/(2*hw);
-for(let i=0;i<n;i++){
-let a=(R.c[i]*(1-s)+R.r[i]*s)/255;a=(a-lo)*inv;
-D[i*4+3]=a<=0?0:a>=1?255:a*255;
-}
-g.putImageData(img,0,0);
-(p.mst||[]).forEach(st=>strokeDraw(g,st,W,H));
-const f=+$("feather").value;
-if(f>0){
-if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
-const c=tcv.getContext("2d");c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(A,0,0);
-g.clearRect(0,0,W,H);g.filter=`blur(${f}px)`;g.drawImage(tcv,0,0);g.filter="none";
-}
-p._fk=key;
-return A;
+  const key=aKey(p,W,H);
+  if(p._fa&&p._fk===key&&p._fa.width===W&&p._fa.height===H)return p._fa;
+  const R=getRef(p,W,H),n=W*H;
+  if(!p._fa)p._fa=document.createElement("canvas");
+  const A=p._fa;A.width=W;A.height=H;
+  const g=A.getContext("2d"),img=g.createImageData(W,H),D=img.data;
+  
+  // PERBAIKAN: Shift multiplier dinaikkan menjadi 0.55 agar tarikan Erode lebih kuat menembus sisa biru
+  const s=BG.sharp,t=.5-BG.shift*.55,hw=.5-.45*BG.cont,lo=t-hw,inv=1/(2*hw);
+  
+  for(let i=0;i<n;i++){
+    let a=(R.c[i]*(1-s)+R.r[i]*s)/255;a=(a-lo)*inv;
+    D[i*4+3]=a<=0?0:a>=1?255:a*255;
+  }
+  g.putImageData(img,0,0);
+  (p.mst||[]).forEach(st=>strokeDraw(g,st,W,H));
+  
+  // Ambil nilai feather dari slider, jika belum diatur beri nilai default 1.5
+  let f=+$("feather").value;
+  if(f === 0) f = 1.5; 
+  
+  if(f>0){
+    if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
+    const c=tcv.getContext("2d");c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(A,0,0);
+    g.clearRect(0,0,W,H);g.filter=`blur(${f}px)`;g.drawImage(tcv,0,0);g.filter="none";
+  }
+  p._fk=key;
+  return A;
 }
 
 /* ---------- Fungsi Dekontaminasi Warna (Menghapus Halo/Spill Biru) ---------- */
