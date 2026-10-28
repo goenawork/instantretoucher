@@ -94,6 +94,52 @@ p._fk=key;
 return A;
 }
 
+/* ---------- Fungsi Dekontaminasi Warna (Menghapus Halo/Spill Biru) ---------- */
+function decontaminateSpill(fgCtx, alphaCtx, W, H) {
+  const fgData = fgCtx.getImageData(0, 0, W, H);
+  const alphaData = alphaCtx.getImageData(0, 0, W, H).data;
+  const d = fgData.data;
+
+  // Memindai piksel semi-transparan di tepian (edge pixels)
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const idx = (y * W + x) * 4;
+      const a = alphaData[idx + 3];
+
+      // Fokus pada area tepi (alpha semi-transparan antara 5% - 95%)
+      if (a > 12 && a < 242) {
+        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+
+        // Ambil sampel warna dari piksel solid di sekitarnya (bagian dalam subjek)
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nIdx = ((y + dy) * W + (x + dx)) * 4;
+            const nAlpha = alphaData[nIdx + 3];
+
+            // Jika piksel tetangga tergolong solid/bagian dalam subjek
+            if (nAlpha >= 200) {
+              rSum += d[nIdx];
+              gSum += d[nIdx + 1];
+              bSum += d[nIdx + 2];
+              count++;
+            }
+          }
+        }
+
+        // Jika menemukan warna sampel dari dalam subjek, ganti RGB piksel tepi dengannya
+        if (count > 0) {
+          d[idx]     = Math.round(rSum / count); // Red
+          d[idx + 1] = Math.round(gSum / count); // Green
+          d[idx + 2] = Math.round(bSum / count); // Blue
+        }
+      }
+    }
+  }
+
+  fgCtx.putImageData(fgData, 0, 0);
+}
+
 /* ---------- Komposit ---------- */
 function composite(p){
 if(!p.mask){out.style.display="none";cv.style.display="block";p._fa=p._fk=p._ref=null;p.mst=[];return;}
@@ -108,7 +154,13 @@ if(mode==="color"){o.fillStyle=$("bgcolor").value;o.fillRect(0,0,W,H);}
 else if(mode==="image"&&bgImg){const k=Math.max(W/bgImg.width,H/bgImg.height),w=bgImg.width*k,h=bgImg.height*k;o.drawImage(bgImg,(W-w)/2,(H-h)/2,w,h);}
 const A=alphaCanvas(p,W,H);
 if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
-const c=tcv.getContext("2d");c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(cv,0,0);
+const c=tcv.getContext("2d",{willReadFrequently:true});
+c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(cv,0,0);
+
+// Dekontaminasi warna sisa background lama sebelum pemotongan alpha
+const aCtx = A.getContext("2d",{willReadFrequently:true});
+decontaminateSpill(c, aCtx, W, H);
+
 c.globalCompositeOperation="destination-in";c.drawImage(A,0,0);c.globalCompositeOperation="source-over";
 o.drawImage(tcv,0,0);
 }
@@ -121,7 +173,7 @@ let pend=false;
 const sched=()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;draw();});};
 $("bgopts").insertAdjacentHTML("beforeend",`
 <div class="row"><span>Edge refine</span><output id="o_bsharp">70</output><input id="bsharp" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Edge refine"></div>
-<div class="row"><span>Shift edge</span><output id="o_bshift">0</output><input id="bshift" type="range" min="-1" max="1" step="0.01" value="0" aria-label="Shift edge"></div>
+<div class="row"><span>Shift edge</span><output id="o_bshift">-10</output><input id="bshift" type="range" min="-1" max="1" step="0.01" value="-0.1" aria-label="Shift edge"></div>
 <div class="row"><span>Edge contrast</span><output id="o_bcont">25</output><input id="bcont" type="range" min="0" max="1" step="0.01" value="0.25" aria-label="Edge contrast"></div>
 <button id="bpr" class="w">Restore brush: off</button>
 <button id="bpe" class="w">Erase brush: off</button>
@@ -130,7 +182,9 @@ $("bgopts").insertAdjacentHTML("beforeend",`
 <button id="bclr" class="w">Clear all strokes</button>
 <div style="font-size:11px;line-height:1.35;color:var(--mute);margin:2px 0 8px">Restore brings back parts of the subject that were removed. Erase removes leftover background. Scroll to zoom for precise strokes. Press <b>[</b> to shrink and <b>]</b> to enlarge the brush.</div>`);
 ["bsharp","bshift","bcont"].forEach(id=>{
-const el=$(id),key={bsharp:"sharp",bshift:"shift",bcont:"cont"}[id];paint(el);
+const el=$(id),key={bsharp:"sharp",bshift:"shift",bcont:"cont"}[id];
+if (id === "bshift") BG[key] = -0.1; // Set default awal shift ke -0.1
+paint(el);
 el.addEventListener("input",()=>{BG[key]=+el.value;$("o_"+id).textContent=Math.round(+el.value*100);paint(el);sched();});
 });
 ["bgmode","bgcolor","feather"].forEach(id=>$(id).addEventListener("input",()=>{$("o_f").textContent=$("feather").value;sched();}));
