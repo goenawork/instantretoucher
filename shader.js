@@ -5,7 +5,7 @@ uniform sampler2D mk;uniform float hasMask,asp,faceW,skin,keep,teeth,eyes;
 uniform float exposure,contrast,highlights,shadows,whites,blacks,temp,tint,vibrance,sat;
 uniform float fine,clarity,dehaze,vig,vmid,vround,vfeather,vhi,grain,gsize;
 uniform vec2 res;
-uniform sampler2D ct;uniform float cvOn;
+uniform sampler2D ct;uniform float cvOn;uniform sampler2D am;uniform float amOn;
 uniform float hue_red,hue_orange,hue_yellow,hue_green,hue_aqua,hue_blue,hue_purple,hue_magenta;
 uniform float sat_red,sat_orange,sat_yellow,sat_green,sat_aqua,sat_blue,sat_purple,sat_magenta;
 uniform float lum_red,lum_orange,lum_yellow,lum_green,lum_aqua,lum_blue,lum_purple,lum_magenta;
@@ -149,5 +149,6 @@ float cell=max(1.,res.x/2200.*mix(1.,3.5,gsize)); vec2 g=floor(v*res/cell);
 float n=hash(g)+hash(g+17.3)-1.; float lg=dot(c,LW);
 c+=n*grain*.22*(1.-pow(abs(lg*2.-1.),2.)*.7);
 }
+if(amOn>.5) c=mix(c0,c,texture2D(am,v).a);
 gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;

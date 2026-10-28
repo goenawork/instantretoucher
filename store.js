@@ -3,7 +3,7 @@
    - Terpisah per akun yang login (lewat logger.js), jadi tiap editor hanya melihat fotonya sendiri.
    - Foto hanya hilang kalau kamu menekan tombol Hapus (atau membersihkan data browser).
    - Foto TIDAK diunggah ke mana pun; semuanya tersimpan di komputer ini.
-   Ikut tersimpan: hasil "Pisahkan subjek" dan goresan kuas Latar. Belum tersimpan: goresan kuas kilau kacamata. */
+   Ikut tersimpan: pengaturan tiap area, hasil Detect Areas, hasil Pisahkan subjek, dan goresan kuas. Belum tersimpan: goresan kuas kilau kacamata. */
 (function () {
   "use strict";
 
@@ -38,12 +38,19 @@
   const getAll = name => tx([name], "readonly", t => t.objectStore(name).getAll());
   const getOne = (name, key) => tx([name], "readonly", t => t.objectStore(name).get(key));
 
-  const metaOf = p => ({
-    id: p._id, seq: p._seq, name: p.name, thumb: p.thumb, s: p.s, rot: p.rot, on: p.on,
-    w0: p.w0, h0: p.h0, raw: p.raw, glare: { auto: p.glare.auto, thr: p.glare.thr }, pc: p.pc || null, crop: p.crop || null, mst: p.mst || []
-  });
+  // Pengaturan seluruh foto = lapisan pertama; area (Face, Skin, ...) = lapisan berikutnya.
+  const LY = p => irLayers(p);
+  const metaOf = p => {
+    const L = LY(p);
+    return {
+      id: p._id, seq: p._seq, name: p.name, thumb: p.thumb, s: L[0].s, rot: p.rot, on: p.on,
+      w0: p.w0, h0: p.h0, raw: p.raw, glare: { auto: p.glare.auto, thr: p.glare.thr }, pc: L[0].pc || null, crop: p.crop || null, mst: p.mst || [],
+      Lx: L.slice(1).map(l => ({ id: l.id, s: l.s, pc: l.pc || null })), ast: p.ast || []
+    };
+  };
   // Penanda perubahan: kalau berubah, data foto disimpan ulang.
-  const sigOf = p => JSON.stringify([p.s, p.rot, p.on, p.glare && p.glare.auto, p.glare && p.glare.thr, p.pc || null, p.crop || null, (p.mst || []).length, (p.mst || []).reduce((a, q) => a + q.pts.length, 0)]);
+  const sigOf = p => JSON.stringify([LY(p).map(l => [l.id, l.s, l.pc || null]), p.rot, p.on, p.glare && p.glare.auto, p.glare && p.glare.thr, p.crop || null,
+    (p.mst || []).length, (p.mst || []).reduce((a, q) => a + q.pts.length, 0), (p.ast || []).length, (p.ast || []).reduce((a, q) => a + q.pts.length, 0)]);
 
   function savePhoto(p, withBlob) {
     return tx(["meta", "blobs"], "readwrite", t => {
@@ -54,7 +61,7 @@
 
   function removeIds(ids) {
     return tx(["meta", "blobs"], "readwrite", t => {
-      ids.forEach(id => { t.objectStore("meta").delete(id); t.objectStore("blobs").delete(id); t.objectStore("blobs").delete("m:" + id); });
+      ids.forEach(id => { t.objectStore("meta").delete(id); t.objectStore("blobs").delete(id); t.objectStore("blobs").delete("m:" + id); t.objectStore("blobs").delete("a:" + id); });
     });
   }
 
@@ -68,13 +75,17 @@
       const p = {
         name: m.name, blob, thumb: m.thumb,
         s: { ...zero(), ...(m.s || {}) },
-        rot: m.rot || 0, pc: Array.isArray(m.pc) ? m.pc : null, crop: m.crop && typeof m.crop === "object" ? m.crop : null, mst: Array.isArray(m.mst) ? m.mst : [], mask: null, on: m.on !== false, w0: m.w0, h0: m.h0, raw: !!m.raw,
+        rot: m.rot || 0, pc: Array.isArray(m.pc) ? m.pc : null, crop: m.crop && typeof m.crop === "object" ? m.crop : null, mst: Array.isArray(m.mst) ? m.mst : [], Lx: Array.isArray(m.Lx) ? m.Lx : [], ast: Array.isArray(m.ast) ? m.ast : [], mask: null, on: m.on !== false, w0: m.w0, h0: m.h0, raw: !!m.raw,
         glare: { auto: !!(m.glare && m.glare.auto), thr: (m.glare && m.glare.thr) || 0.88, strokes: [] },
         _id: m.id, _seq: m.seq
       };
       try {
         const mb = await getOne("blobs", "m:" + m.id);
         if (mb) { const bm = await createImageBitmap(mb), c = document.createElement("canvas"); c.width = bm.width; c.height = bm.height; c.getContext("2d").drawImage(bm, 0, 0); bm.close(); p.mask = c; p._mk = c; }
+      } catch (e) {}
+      try {
+        const ab = await getOne("blobs", "a:" + m.id);
+        if (ab && ab.c) { p.areas = ab; p._ak = ab; }
       } catch (e) {}
       p._sig = sigOf(p);
       photos.push(p);
@@ -114,6 +125,15 @@
           // foto lama: simpan ulang hanya kalau slider/rotasi/centang berubah
           const sg = sigOf(p);
           if (sg !== p._sig) { try { await savePhoto(p, false); p._sig = sg; } catch (e) {} }
+        }
+        // hasil Detect Areas: simpan data kelas (kecil), hapus kalau dibuang
+        if (p._id && p.areas !== p._ak) {
+          const ak = p.areas;
+          try {
+            if (ak) await tx(["blobs"], "readwrite", t => { t.objectStore("blobs").put({ w: ak.w, h: ak.h, c: ak.c }, "a:" + p._id); });
+            else await tx(["blobs"], "readwrite", t => { t.objectStore("blobs").delete("a:" + p._id); });
+            p._ak = ak;
+          } catch (e) {}
         }
         // hasil Pisahkan subjek (mask): simpan sebagai PNG kecil, hapus kalau mask dibuang
         if (p._id && p.mask !== p._mk) {

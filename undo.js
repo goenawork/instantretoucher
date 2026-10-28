@@ -1,7 +1,7 @@
 /* InstantManiaRetoucher - Undo / Redo per foto.
    - Ctrl+Z = Undo, Ctrl+Y atau Ctrl+Shift+Z = Redo (sama seperti Photoshop).
    - Satu langkah riwayat = satu "sesi" perubahan (menarik slider sampai berhenti, menggeser titik kurva, Reset, dll).
-   - Yang tercatat: semua slider, kurva titik, crop, goresan kuas Latar, dan pengaturan kilau otomatis.
+   - Yang tercatat: semua slider di semua area, kurva titik, crop, goresan kuas, dan pengaturan kilau otomatis.
    - Belum tercatat: rotasi, hasil "Pisahkan subjek", dan goresan kuas kilau. */
 (function () {
   "use strict";
@@ -11,7 +11,7 @@
   let applying = false;
 
   const snap = p => JSON.stringify({
-    s: p.s, pc: p.pc || null, c: p.crop || null, m: p.mst || [],
+    L: irLayers(p).map(l => ({ id: l.id, s: l.s, pc: l.pc || null })), c: p.crop || null, m: p.mst || [], a: p.ast || [],
     g: [!!(p.glare && p.glare.auto), p.glare ? p.glare.thr : 0.88]
   });
 
@@ -25,7 +25,7 @@
     if (!cur || !cur._h || applying) return;
     const sg = snap(cur);
     if (sg !== cur._h.st[cur._h.i]) pushStep(cur._h, sg);
-    cur._h.ml = (cur.mst || []).length;
+    cur._h.ml = (cur.mst || []).length + (cur.ast || []).length;
     buttons();
   };
 
@@ -35,7 +35,7 @@
     for (const p of photos) {
       const sg = snap(p);
       if (!p._h) { p._h = { st: [sg], i: 0, last: sg, t: 0 }; continue; }
-      const h = p._h, ml = (p.mst || []).length;
+      const h = p._h, ml = (p.mst || []).length + (p.ast || []).length;
       if (h.ml === undefined) h.ml = ml;
       if (ml !== h.ml) {                                                   // goresan kuas: tiap goresan = satu langkah sendiri
         h.ml = ml; pushStep(h, sg); buttons(); continue;
@@ -63,8 +63,10 @@
     try {
       const cropChanged = JSON.stringify(cur.crop || null) !== JSON.stringify(d.c || null);
       const glareChanged = !!cur.glare.auto !== d.g[0] || cur.glare.thr !== d.g[1];
-      cur.s = { ...zero(), ...d.s };
-      cur.pc = d.pc ? d.pc.map(a => [a[0], a[1]]) : null;
+      irEnsureLayers(cur);
+      cur.L = d.L.map(l => ({ id: l.id, s: { ...zero(), ...l.s }, pc: l.pc ? l.pc.map(a => [a[0], a[1]]) : null }));
+      if (!cur.L.length || cur.L[0].id !== "all") cur.L.unshift({ id: "all", s: zero(), pc: null });
+      if (JSON.stringify(cur.ast || []) !== JSON.stringify(d.a || [])) { cur.ast = d.a || []; cur._ac = null; }
       cur.glare.auto = d.g[0]; cur.glare.thr = d.g[1];
       const mstChanged = JSON.stringify(cur.mst || []) !== JSON.stringify(d.m || []);
       if (mstChanged) { cur.mst = d.m || []; cur._fk = null; }
@@ -72,7 +74,7 @@
         cur.crop = d.c || null;
         if (window.irCrop) window.irCrop.invalidate(cur);
       }
-      h.i = to; h.last = h.st[to]; h.t = 0; h.ml = (cur.mst || []).length;
+      h.i = to; h.last = h.st[to]; h.t = 0; h.ml = (cur.mst || []).length + (cur.ast || []).length;
       syncUI();
       if (glareChanged || cropChanged) { await show(cur, PREV); if (cropChanged) fitView(); } else draw();
     } finally { applying = false; buttons(); }

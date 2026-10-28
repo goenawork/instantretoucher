@@ -6,6 +6,7 @@
    4. p.mst    = goresan kuas manual (Pulihkan / Hapus), disimpan sebagai koordinat 0..1 sehingga tetap tajam di ekspor.
    5. Haluskan tepi (feather) terakhir.
    Hasil akhir dibuat di ukuran tampilan atau ekspor lalu disimpan di p._fa agar menggeser slider warna tetap ringan. */
+(function(){
 let bgImg=null;
 const BG={sharp:.7,shift:0,cont:.25,tool:null,cur:null};
 const tcv=document.createElement("canvas");   // kanvas sementara, dipakai ulang
@@ -119,15 +120,15 @@ if(p!==cur){p._fa=p._fk=p._ref=null;}   // hemat memori: cache hanya untuk foto 
 let pend=false;
 const sched=()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;draw();});};
 $("bgopts").insertAdjacentHTML("beforeend",`
-<div class="row"><span>Pertajam tepi (ikuti garis objek)</span><output id="o_bsharp">70</output><input id="bsharp" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Pertajam tepi"></div>
-<div class="row"><span>Geser tepi (kecil &larr; &rarr; lebar)</span><output id="o_bshift">0</output><input id="bshift" type="range" min="-1" max="1" step="0.01" value="0" aria-label="Geser tepi"></div>
-<div class="row"><span>Kontras tepi</span><output id="o_bcont">25</output><input id="bcont" type="range" min="0" max="1" step="0.01" value="0.25" aria-label="Kontras tepi"></div>
-<button id="bpr" class="w">Kuas pulihkan: mati</button>
-<button id="bpe" class="w">Kuas hapus: mati</button>
-<div class="row"><span>Ukuran kuas</span><output id="o_bsize">4</output><input id="bsize" type="range" min="0.5" max="20" step="0.5" value="4" aria-label="Ukuran kuas"></div>
-<button id="bundo" class="w">Batalkan goresan terakhir</button>
-<button id="bclr" class="w">Hapus semua goresan</button>
-<div style="font-size:11px;line-height:1.35;color:var(--mute);margin:2px 0 8px">Pulihkan = kembalikan bagian subjek yang ikut terhapus. Hapus = buang sisa latar. Perbesar foto dengan scroll untuk goresan yang presisi. Tombol <b>[</b> mengecilkan kuas, <b>]</b> membesarkan.</div>`);
+<div class="row"><span>Edge refine</span><output id="o_bsharp">70</output><input id="bsharp" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Edge refine"></div>
+<div class="row"><span>Shift edge</span><output id="o_bshift">0</output><input id="bshift" type="range" min="-1" max="1" step="0.01" value="0" aria-label="Shift edge"></div>
+<div class="row"><span>Edge contrast</span><output id="o_bcont">25</output><input id="bcont" type="range" min="0" max="1" step="0.01" value="0.25" aria-label="Edge contrast"></div>
+<button id="bpr" class="w">Restore brush: off</button>
+<button id="bpe" class="w">Erase brush: off</button>
+<div class="row"><span>Brush size</span><output id="o_bsize">4</output><input id="bsize" type="range" min="0.5" max="20" step="0.5" value="4" aria-label="Brush size"></div>
+<button id="bundo" class="w">Undo last stroke</button>
+<button id="bclr" class="w">Clear all strokes</button>
+<div style="font-size:11px;line-height:1.35;color:var(--mute);margin:2px 0 8px">Restore brings back parts of the subject that were removed. Erase removes leftover background. Scroll to zoom for precise strokes. Press <b>[</b> to shrink and <b>]</b> to enlarge the brush.</div>`);
 ["bsharp","bshift","bcont"].forEach(id=>{
 const el=$(id),key={bsharp:"sharp",bshift:"shift",bcont:"cont"}[id];paint(el);
 el.addEventListener("input",()=>{BG[key]=+el.value;$("o_"+id).textContent=Math.round(+el.value*100);paint(el);sched();});
@@ -183,8 +184,9 @@ c.lineWidth=.8;c.strokeStyle="rgba(0,0,0,.6)";c.stroke();
 function setTool(t){
 BG.tool=BG.tool===t?null:t;
 if(BG.tool&&typeof brush!=="undefined"&&brush)$("gbrush").onclick();
-$("bpr").textContent="Kuas pulihkan: "+(BG.tool==="r"?"nyala":"mati");
-$("bpe").textContent="Kuas hapus: "+(BG.tool==="e"?"nyala":"mati");
+if(BG.tool&&window.irAreaToolOff)window.irAreaToolOff();
+$("bpr").textContent="Restore brush: "+(BG.tool==="r"?"on":"off");
+$("bpe").textContent="Erase brush: "+(BG.tool==="e"?"on":"off");
 bov.style.display=BG.tool&&cur&&cur.mask?"block":"none";
 if(BG.tool){placeBov();ring(null);}
 }
@@ -248,3 +250,8 @@ bov.style.display=cur&&cur.mask?"block":"none";
 if(cur&&cur.mask&&!BG.cur)placeBov();
 }
 },250);
+
+/* Yang dipakai file lain */
+window.composite=composite;window.guided=guided;window.strokeDraw=strokeDraw;window.BG=BG;
+window.irBgToolOff=()=>{if(BG.tool)setTool(BG.tool);};
+})();

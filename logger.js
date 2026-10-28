@@ -245,13 +245,25 @@
   }
 
   async function record(p) {
-    const pcOn = (typeof pcIsId === "function" && p) ? !pcIsId(p.pc) : false;
-    if (!p || !p.s || !p.thumb || (!isEdited(p.s) && !pcOn)) return;
+    if (!p || !p.thumb) return;
+    const LYR = typeof irLayers === "function" ? irLayers(p) : [{ id: "all", s: p.s, pc: p.pc || null }];
+    const G = LYR[0], pcOn = (typeof pcIsId === "function") ? !pcIsId(G.pc) : false;
+    const areaLs = LYR.slice(1).filter(l => p.areas && typeof irLayerActive === "function" && irLayerActive(l));
+    if (!G.s || (!isEdited(G.s) && !pcOn && !areaLs.length)) return;
     const settings = {};
-    Object.keys(p.s).forEach(k => { settings[k] = r4(+p.s[k]); });
+    Object.keys(G.s).forEach(k => { settings[k] = r4(+G.s[k]); });
     if (pcOn) {
-      settings.pc = p.pc.map(a => [r4(a[0]), r4(a[1])]);
-      if (typeof pcSample9 === "function") settings.pc9 = pcSample9(p.pc).map(r4);
+      settings.pc = G.pc.map(a => [r4(a[0]), r4(a[1])]);
+      if (typeof pcSample9 === "function") settings.pc9 = pcSample9(G.pc).map(r4);
+    }
+    if (areaLs.length) {            // pengaturan tiap area (Face, Skin, Hair, ...) dicatat terpisah, hanya nilai yang berubah
+      settings.areas = {};
+      areaLs.forEach(l => {
+        const o = {};
+        Object.keys(l.s).forEach(k => { if (Math.abs(+l.s[k] - (DEF[k] || 0)) > 1e-6) o[k] = r4(+l.s[k]); });
+        if (typeof pcIsId === "function" && !pcIsId(l.pc)) o.pc = l.pc.map(a => [r4(a[0]), r4(a[1])]);
+        settings.areas[l.id] = o;
+      });
     }
     const sig = JSON.stringify(settings);
     if (seen.get(p.name) === sig) return;

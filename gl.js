@@ -1,6 +1,30 @@
 /* ---------- WebGL ---------- */
 const gl=cv.getContext("webgl",{preserveDrawingBuffer:true,premultipliedAlpha:false});
 const U={}; let MAXT=4096, ctex=null, ckey="";
+/* ---------- Lapisan area ----------
+   p.L[0] = pengaturan untuk SELURUH foto. p.L[1..] = pengaturan khusus satu area (face, skin, body, hair, clothes, bg).
+   irACT = area yang sedang dipilih. p.s dan p.pc selalu menunjuk ke pengaturan area aktif, jadi semua slider dan tool
+   yang sudah ada otomatis bekerja pada area aktif. Render menumpuk: seluruh foto dulu, lalu tiap area di dalam mask-nya. */
+let irACT="all";
+const irAREAS=[["face","Face"],["skin","Skin"],["body","Body Skin"],["hair","Hair"],["clothes","Clothes"],["bg","Background"]];
+function irEnsureLayers(p){
+if(p.L)return p.L;
+const g={id:"all",s:p.s,pc:p.pc||null};
+p.L=[g];
+(p.Lx||[]).forEach(l=>p.L.push({id:l.id,s:{...zero(),...l.s},pc:l.pc||null}));
+delete p.Lx;delete p.s;delete p.pc;
+Object.defineProperty(p,"s",{get(){return irLayerOf(this,irACT).s;},set(v){irLayerOf(this,irACT).s=v;},configurable:true,enumerable:true});
+Object.defineProperty(p,"pc",{get(){return irLayerOf(this,irACT).pc;},set(v){irLayerOf(this,irACT).pc=v;},configurable:true,enumerable:true});
+return p.L;
+}
+function irLayerOf(p,id){
+irEnsureLayers(p);
+let l=p.L.find(x=>x.id===id);
+if(!l){l={id,s:zero(),pc:null};p.L.push(l);}
+return l;
+}
+function irLayers(p){return irEnsureLayers(p);}
+function irLayerActive(l){return Object.keys(l.s).some(k=>Math.abs((+l.s[k])-(DEF[k]||0))>1e-6)||!pcIsId(l.pc);}
 if(!gl) msg("Browser tidak mendukung WebGL.");
 else{
 const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(o));return o;};
@@ -10,10 +34,15 @@ gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
 const loc=gl.getAttribLocation(pr,"p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 IDS.forEach(k=>U[k]=gl.getUniformLocation(pr,k)); MAXT=gl.getParameter(gl.MAX_TEXTURE_SIZE);
-["hasMask","asp","faceW","res","cvOn"].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
+["hasMask","asp","faceW","res","cvOn","amOn"].forEach(k=>U[k]=gl.getUniformLocation(pr,k));
 gl.uniform1i(gl.getUniformLocation(pr,"t"),0); gl.uniform1i(gl.getUniformLocation(pr,"mk"),1); mtex=gl.createTexture();
 gl.uniform1i(gl.getUniformLocation(pr,"ct"),2); ctex=gl.createTexture();
 gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,ctex);
+[gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+[gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
+gl.uniform1i(gl.getUniformLocation(pr,"am"),3);
+const dm=gl.createTexture();gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,dm);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
 [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
 [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
 gl.activeTexture(gl.TEXTURE0);
@@ -132,10 +161,37 @@ const sb=$("syncb");if(sb)sb.addEventListener("click",()=>{if(!cur)return;photos
 const cd=cvPrev.closest("details"),cr=cd&&cd.querySelector(".rs");
 if(cr)cr.addEventListener("click",()=>{if(cur){cur.pc=null;draw();}});
 }
+let irFbo=null,irFt=[null,null],irFW=0,irFH=0;
+function irEnsureFBO(W,H){
+if(!irFbo)irFbo=gl.createFramebuffer();
+if(irFW===W&&irFH===H&&irFt[0])return;
+irFt.forEach(t=>{if(t)gl.deleteTexture(t);});
+irFt=[0,1].map(()=>{
+const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,t);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+[gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+[gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
+return t;});
+irFW=W;irFH=H;
+}
+function irAreaTexBind(p,id,c){
+const T=p._at||(p._at={});let r=T[id];
+if(!r)r=T[id]={tex:gl.createTexture(),v:-1};
+gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,r.tex);
+if(r.v!==c._v){
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
+[gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+[gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
+r.v=c._v;
+}
+gl.activeTexture(gl.TEXTURE0);
+}
+function irFreeAreaTex(p){if(p._at&&gl){Object.values(p._at).forEach(r=>gl.deleteTexture(r.tex));}p._at=null;}
 function draw(p=cur){
 if(!p||!tex)return;
-gl.viewport(0,0,cv.width,cv.height);
-const off=bypass&&p===cur;
+irEnsureLayers(p);
+const W=cv.width,H=cv.height,off=bypass&&p===cur;
 if(mown!==p.fmask){
 mown=p.fmask;gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,mtex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
 if(p.fmask)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,p.fmask);
@@ -144,13 +200,39 @@ else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Ui
 [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));
 gl.activeTexture(gl.TEXTURE0);
 }
-const sp=off?{}:p.s,pc=off?null:p.pc;
+/* Susunan putaran render: seluruh foto, lalu tiap area yang sudah diedit (hanya di dalam mask-nya). */
+let passes;
+if(off)passes=[{s:{},pc:null,area:null,c:null}];
+else{
+passes=[{s:p.L[0].s,pc:p.L[0].pc,area:null,c:null}];
+if(p.areas&&typeof irAreaCanvas==="function"){
+for(const l of p.L.slice(1)){
+if(!irLayerActive(l))continue;
+const c=irAreaCanvas(p,l.id,W,H);
+if(c)passes.push({s:l.s,pc:l.pc,area:l.id,c});
+}}}
+const n=passes.length;
+if(n>1)irEnsureFBO(W,H);
+let src=tex;
+passes.forEach((ps,i)=>{
+const last=i===n-1,sp=ps.s,pc=ps.pc;
+if(last)gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+else{gl.bindFramebuffer(gl.FRAMEBUFFER,irFbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,irFt[i%2],0);}
+gl.viewport(0,0,W,H);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,src);
+if(ps.area)irAreaTexBind(p,ps.area,ps.c);
 const cOn=(Math.abs(sp.cv_hi||0)+Math.abs(sp.cv_li||0)+Math.abs(sp.cv_da||0)+Math.abs(sp.cv_sh||0))>.003||!pcIsId(pc);
 setCurve(sp,pc);
 gl.uniform1f(U.cvOn,cOn?1:0);
-gl.uniform1f(U.hasMask,p.fmask?1:0);gl.uniform1f(U.asp,cv.width/cv.height);gl.uniform1f(U.faceW,p.faceW||.3);gl.uniform2f(U.res,cv.width,cv.height);
-IDS.forEach(k=>gl.uniform1f(U[k],off?0:p.s[k]));
-gl.drawArrays(gl.TRIANGLE_STRIP,0,4); composite(p);
+gl.uniform1f(U.amOn,ps.area?1:0);
+gl.uniform1f(U.hasMask,p.fmask?1:0);gl.uniform1f(U.asp,W/H);gl.uniform1f(U.faceW,p.faceW||.3);gl.uniform2f(U.res,W,H);
+IDS.forEach(k=>gl.uniform1f(U[k],off?0:sp[k]));
+gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+src=irFt[i%2];
+});
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+composite(p);
 if(p===cur)drawCurve(p);
 }
 async function show(p,cap,tk){

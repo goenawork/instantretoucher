@@ -8,7 +8,7 @@
   "use strict";
 
   const RAT = [
-    { id: "free", label: "Bebas" }, { id: "orig", label: "Asli" },
+    { id: "free", label: "Free" }, { id: "orig", label: "Original" },
     { id: "1:1", a: 1, b: 1, label: "1:1" }, { id: "2:3", a: 2, b: 3, label: "2:3" },
     { id: "4:5", a: 4, b: 5, label: "4:5" }, { id: "5:7", a: 5, b: 7, label: "5:7" },
     { id: "9:16", a: 9, b: 16, label: "9:16" }
@@ -42,6 +42,7 @@
   function invalidate(p) {
     const had = !!p.mask;
     p.mask = null; p.mst = []; p._fa = p._fk = p._ref = null; p.faces = null; p.fmask = null; p._fp = null; p.glare.strokes = [];
+    if (window.irAreasReset && p.areas) window.irAreasReset(p);
     if (p === cur) $("bgopts").hidden = true;
     return had;
   }
@@ -58,12 +59,12 @@
   const sec = document.createElement("details");
   sec.className = "sec";
   sec.innerHTML = '<summary><span>Crop</span></summary><div class="body">' +
-    '<button id="cr_go" class="w" disabled>Mulai crop</button>' +
+    '<button id="cr_go" class="w" disabled>Start crop</button>' +
     '<div class="cropg" id="cr_rat"></div>' +
-    '<button id="cr_flip" class="w" disabled>⇄ Balik orientasi</button>' +
-    '<div style="display:flex;gap:6px;margin-top:6px"><button id="cr_ok" class="w" disabled>Selesai (Enter)</button><button id="cr_no" class="w" disabled>Batal (Esc)</button></div>' +
-    '<button id="cr_all" class="w" disabled>Terapkan rasio ke foto tercentang</button>' +
-    '<button id="cr_del" class="w" disabled>Hapus crop foto ini</button>' +
+    '<button id="cr_flip" class="w" disabled>⇄ Flip orientation</button>' +
+    '<div style="display:flex;gap:6px;margin-top:6px"><button id="cr_ok" class="w" disabled>Done (Enter)</button><button id="cr_no" class="w" disabled>Cancel (Esc)</button></div>' +
+    '<button id="cr_all" class="w" disabled>Apply ratio to checked photos</button>' +
+    '<button id="cr_del" class="w" disabled>Remove crop</button>' +
     '<div id="cropinfo"></div></div>';
   panel.prepend(sec);
   const $c = id => sec.querySelector("#" + id);
@@ -117,7 +118,7 @@
     lab.textContent = `${Math.round(r.w)} × ${Math.round(r.h)}`;
     const locked = ratio !== "free";
     ["n", "e", "s", "w"].forEach(k => { hds[k].style.display = locked ? "none" : ""; });
-    $c("cropinfo").textContent = `Kotak crop: ${Math.round(r.w)} × ${Math.round(r.h)} px`;
+    $c("cropinfo").textContent = `Crop box: ${Math.round(r.w)} × ${Math.round(r.h)} px`;
   }
 
   /* ---------- Interaksi ---------- */
@@ -181,9 +182,9 @@
     $c("cr_no").disabled = !ed;
     $c("cr_all").disabled = !has || ratio === "free" || busy;
     $c("cr_del").disabled = !has || !cur.crop || !!ed;
-    $c("cr_go").textContent = cur && cur.crop ? "Ubah crop" : "Mulai crop";
+    $c("cr_go").textContent = cur && cur.crop ? "Edit crop" : "Start crop";
     if (!ed) {
-      if (cur && cur.crop) { const f = full(cur); $c("cropinfo").textContent = `Hasil crop: ${Math.round(cur.crop.w * f.w)} × ${Math.round(cur.crop.h * f.h)} px`; }
+      if (cur && cur.crop) { const f = full(cur); $c("cropinfo").textContent = `Result: ${Math.round(cur.crop.w * f.w)} × ${Math.round(cur.crop.h * f.h)} px`; }
       else $c("cropinfo").textContent = "";
     }
   }
