@@ -86,6 +86,7 @@ function glareKind(r,g,b,thr,satMin=.28){
   }
   return 0;
 }
+
 function applyGlare(p){
   p._gcount={w:0,c:0};
   const W=wc.width,H=wc.height,E=p.glare.auto&&p.faces?eyeBoxes(p):[],S=p.glare.strokes;
@@ -93,41 +94,65 @@ function applyGlare(p){
   E.forEach(e=>ext(e.cx-e.rx,e.cy-e.ry,e.cx+e.rx,e.cy+e.ry));
   S.forEach(s=>{const r=s.r*W;s.pts.forEach(q=>ext(q[0]*W-r,q[1]*H-r,q[0]*W+r,q[1]*H+r));});
   if(x1<=x0)return;
-  const pad=Math.round(W*.01);
+  
+  const pad=Math.round(W*.02); 
   x0=Math.max(0,Math.floor(x0-pad));y0=Math.max(0,Math.floor(y0-pad));x1=Math.min(W,Math.ceil(x1+pad));y1=Math.min(H,Math.ceil(y1+pad));
   const bw=x1-x0,bh=y1-y0,ctx=wc.getContext("2d"),img=ctx.getImageData(x0,y0,bw,bh),D=img.data,thr=p.glare.thr;
   const M=new Uint8Array(bw*bh),C=new Uint8Array(bw*bh);
-  const mark=(i,t)=>{const k=glareKind(D[i*4],D[i*4+1],D[i*4+2],t);if(k===1)M[i]=1;else if(k===2)C[i]=1;};
+  
+  const mark=(i,t)=>{
+      const r=D[i*4], g=D[i*4+1], b=D[i*4+2];
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b), luma=(.2126*r+.7152*g+.0722*b)/255;
+      
+      if(luma>t && (mx-mn)<100) { M[i]=1; return; }
+      
+      if(mx>70 && (mx-mn)/mx>0.08){
+        const d=mx-mn;let h=mx===r?((g-b)/d+6)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;
+        if(h>40 && h<330) C[i]=1; 
+      }
+  };
+  
   if(E.length)for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){
     const wx=x0+x,wy=y0+y;
-    if(E.some(e=>((wx-e.cx)/e.rx)**2+((wy-e.cy)/e.ry)**2<=1))mark(y*bw+x,thr);
+    if(E.some(e=>((wx-e.cx)/e.rx)**2+((wy-e.cy)/e.ry)**2<=1.2)) mark(y*bw+x,thr); 
   }
+  
   if(S.length){
     const t=document.createElement("canvas");t.width=bw;t.height=bh;const tc=t.getContext("2d");
     tc.lineCap=tc.lineJoin="round";tc.strokeStyle="#fff";
     S.forEach(s=>{tc.lineWidth=s.r*W*2;tc.beginPath();s.pts.forEach((q,k)=>{const X=q[0]*W-x0,Y=q[1]*H-y0;k?tc.lineTo(X,Y):tc.moveTo(X,Y);});
       if(s.pts.length===1)tc.lineTo(s.pts[0][0]*W-x0+.01,s.pts[0][1]*H-y0);tc.stroke();});
-    const a=tc.getImageData(0,0,bw,bh).data;for(let i=0;i<bw*bh;i++)if(a[i*4+3]>60)mark(i,Math.max(.5,thr-.2));
+    const a=tc.getImageData(0,0,bw,bh).data;for(let i=0;i<bw*bh;i++)if(a[i*4+3]>60)mark(i,Math.max(.4,thr-.3));
   }
-  // 1) kilau berwarna (lapisan anti-refleksi): netralkan warna, struktur mata tetap terbaca
-  const CD=dilate(C,bw,bh,Math.max(1,Math.round(W*.0008)));
-  for(let i=0;i<bw*bh;i++)if(CD[i]){
+
+  const CD=dilate(C,bw,bh,Math.max(2,Math.round(W*.0015))); 
+  for(let i=0;i<bw*bh;i++)if(CD[i] && !M[i]){
     const r=D[i*4],g=D[i*4+1],b=D[i*4+2];
-    if(!C[i]&&glareKind(r,g,b,2,.12)!==2)continue;
-    const w=C[i]?1:.6,v=.55*Math.min(r,g,b)+.45*(r+g+b)/3;
-    D[i*4]=r+(v*1.08-r)*w;D[i*4+1]=g+(v-g)*w;D[i*4+2]=b+(v*.92-b)*w;
+    const w=C[i]?1:.7, luma = .3*r + .59*g + .11*b;
+    D[i*4]=r+(luma-r)*w;D[i*4+1]=g+(luma-g)*w;D[i*4+2]=b+(luma-b)*w;
     if(C[i])p._gcount.c++;
   }
-  // 2) kilau putih: isi dari piksel di sekelilingnya
+
   if(M.some(v=>v)){
-    const MD=dilate(M,bw,bh,Math.max(2,Math.round(W*.002))),F=pushPull(D,MD,bw,bh);
-    let sum=0,n=0;
-    for(let y=0;y<bh;y+=2)for(let x=0;x<bw-1;x+=2){const i=y*bw+x;if(!MD[i]&&!MD[i+1]){sum+=Math.abs(D[i*4+1]-D[(i+1)*4+1]);n++;}}
-    const sg=n?sum/n*.8:0,nz=()=>(Math.random()+Math.random()-1)*sg*1.7;
-    for(let i=0;i<bw*bh;i++){if(M[i])p._gcount.w++;if(MD[i]){const z=nz();for(let ch=0;ch<3;ch++)D[i*4+ch]=Math.max(0,Math.min(255,F[i*3+ch]+z));D[i*4+3]=255;}}
+    const MD=dilate(M,bw,bh,Math.max(3,Math.round(W*.003)));
+    const F=pushPull(D,MD,bw,bh);
+    
+    for(let i=0;i<bw*bh;i++){
+        if(M[i])p._gcount.w++;
+        if(MD[i]){
+            const ir = F[i*3], ig = F[i*3+1], ib = F[i*3+2];
+            const noise = (Math.random()-0.5) * 6; 
+            const origR = D[i*4]/255, origG = D[i*4+1]/255, origB = D[i*4+2]/255;
+            
+            D[i*4]   = Math.max(0, Math.min(255, (origR * ir) + (ir * 0.3) + noise));
+            D[i*4+1] = Math.max(0, Math.min(255, (origG * ig) + (ig * 0.3) + noise));
+            D[i*4+2] = Math.max(0, Math.min(255, (origB * ib) + (ib * 0.3) + noise));
+        }
+    }
   }
   if(p._gcount.w||p._gcount.c)ctx.putImageData(img,x0,y0);
 }
+
 async function refresh(){const my=++tok;try{await show(cur,PREV,my);}catch(e){msg("Gagal memproses: "+e.message);}if(brush){placeOv();drawOv();}}
 $("gfix").onclick=async()=>{
   if(!cur||busy)return;cur.glare.auto=true;cur.glare.thr=+$("gthr").value;msg("Mencari dan menghapus kilau...");
