@@ -103,7 +103,18 @@
       return false;
     }
   }
-  window.irAreaTest = { setSeg(s) { AR.fake = s; }, detect };   // dipakai untuk pengujian
+  window.irAreaTest = { setSeg(s) { AR.fake = s; }, detect };
+  window.irDetectAreas = detect;
+  window.irAreaThumb = function (p, id, W, H) {   // mask area kasar berukuran kecil, khusus thumbnail
+    if (!p.areas || !p.areas.c) return null;
+    const raw = rawFor(p, id); if (!raw) return null;
+    const { w, h } = p.areas, s = mkCv(w, h), g = s.getContext("2d"), im = g.createImageData(w, h);
+    for (let i = 0; i < w * h; i++) im.data[i * 4 + 3] = raw[i];
+    g.putImageData(im, 0, 0);
+    const c = mkCv(W, H), cg = c.getContext("2d"); cg.imageSmoothingQuality = "high"; cg.drawImage(s, 0, 0, W, H);
+    (p.ast || []).filter(st => st.a === id).forEach(st => strokeDraw(cg, st, W, H));
+    return c;
+  };   // dipakai untuk pengujian
 
   /* ---------- Panel Selection ---------- */
   const st = document.createElement("style");

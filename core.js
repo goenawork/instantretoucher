@@ -21,7 +21,8 @@ const SECS=[
 ["Effects",0,[["fine","Texture",-1,1],["clarity","Clarity",-1,1],["dehaze","Dehaze",-1,1],["vig","Vignette",-1,1],
 ["vmid","Midpoint",0,1,.5,1],["vround","Roundness",-1,1,0,1],["vfeather","Feather",0,1,.5,1],["vhi","Highlights",0,1,0,1],["grain","Grain",0,1],["gsize","Grain size",0,1,.25,1]]],
 ["Skin",0,[["skin","Skin smoothing",0,1],["keep","Keep texture",0,1,.6]],"Retouch"],
-["Eyes & Mouth",0,[["eyes","Brighten eyes",0,1],["teeth","Whiten teeth",0,1]],"Retouch"]
+["Eyes & Mouth",0,[["eyes","Brighten eyes",0,1],["teeth","Whiten teeth",0,1]],"Retouch"],
+["Blemish Removal",0,[["acne","Acne",0,1],["freck","Freckles",0,1],["blsz","Spot size",0,1,.35],["blsn","Sensitivity",0,1,.5]]]
 ];
 const IDS=SECS.flatMap(g=>g[2].map(r=>r[0]));
 const DEF={};SECS.forEach(g=>g[2].forEach(r=>DEF[r[0]]=r[4]||0));const zero=()=>({...DEF});
@@ -63,7 +64,7 @@ const show=on=>{row.classList.toggle("open",on);row._subs.forEach(r=>{r.style.di
 row.querySelector("span").addEventListener("click",()=>{if(row._subs.length)show(!row.classList.contains("open"));});
 sl.addEventListener("pointerdown",()=>{if(row._subs.length)show(true);});}
 sl.addEventListener("input",()=>{if(!cur)return;cur.s[id]=+sl.value;$("o_"+id).textContent=disp(id,+sl.value);
-if(["skin","teeth","eyes"].includes(id)&&+sl.value>0&&!cur.faces&&!busy)ensureFaces(cur).then(()=>draw());draw();});
+if(["skin","teeth","eyes","acne","freck"].includes(id)&&+sl.value>0&&!cur.faces&&!busy)ensureFaces(cur).then(()=>draw());draw();});
 sl.addEventListener("dblclick",()=>{sl.value=def;sl.dispatchEvent(new Event("input"));});
 });}
 const MENUS={HSL:{tabs:true},"Selective Color":{tabs:true,dots:true},Retouch:{}},menuEls={};
@@ -90,8 +91,8 @@ const sd=mkSec(title,0,"in");addRows(sd.querySelector(".body"),items);
 sd.querySelector(".rs").onclick=e=>{e.preventDefault();e.stopPropagation();resetItems(items);};
 m.body.appendChild(sd);}
 });
-menuEls.Retouch.body.insertAdjacentHTML("beforeend",`
-<details class="sec in"><summary><span>Glasses Glare</span></summary><div class="body">
+panel.insertAdjacentHTML("beforeend",`
+<details class="sec"><summary><span>Glasses Glare</span></summary><div class="body">
 <button id="gfix" class="w" disabled>Remove glare (auto)</button>
 <div class="row"><span>Glare threshold (lower = more)</span><output id="o_gt">0.88</output><input id="gthr" type="range" min="0.6" max="0.99" step="0.01" value="0.88" aria-label="Glare threshold"></div>
 <button id="gbrush" class="w" disabled>Glare brush: off</button>

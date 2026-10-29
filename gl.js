@@ -235,6 +235,53 @@ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 composite(p);
 if(p===cur)drawCurve(p);
 }
+/* ---------- Render kecil untuk thumbnail: memakai pipeline yang sama, hasilnya dibaca ke memori, kanvas utama tidak berubah ---------- */
+let irSm={w:0,h:0,t:[null,null],f:null};
+function irRenderSmall(p,src,W,H){
+if(!gl)return null;
+irEnsureLayers(p);
+const vp=gl.getParameter(gl.VIEWPORT);
+if(!irSm.f)irSm.f=gl.createFramebuffer();
+if(irSm.w!==W||irSm.h!==H){
+irSm.t.forEach(t=>{if(t)gl.deleteTexture(t);});
+irSm.t=[0,1].map(()=>{const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,t);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+[gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+[gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));return t;});
+irSm.w=W;irSm.h=H;
+}
+const mkT=(unit,c)=>{const t=gl.createTexture();gl.activeTexture(unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
+[gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.LINEAR));
+[gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(f=>gl.texParameteri(gl.TEXTURE_2D,f,gl.CLAMP_TO_EDGE));return t;};
+const srcT=mkT(gl.TEXTURE0,src),tmp=[];
+const passes=[{s:p.L[0].s,pc:p.L[0].pc,c:null}];
+if(p.areas&&typeof irAreaThumb==="function"){
+for(const l of p.L.slice(1)){if(!irLayerActive(l))continue;const c=irAreaThumb(p,l.id,W,H);if(c)passes.push({s:l.s,pc:l.pc,c});}
+}
+let inT=srcT;
+passes.forEach((ps,i)=>{
+const outT=irSm.t[i%2];
+gl.bindFramebuffer(gl.FRAMEBUFFER,irSm.f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,outT,0);
+gl.viewport(0,0,W,H);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,inT);
+if(ps.c){const t=mkT(gl.TEXTURE3,ps.c);tmp.push(t);gl.activeTexture(gl.TEXTURE0);}
+const sp=ps.s,cOn=(Math.abs(sp.cv_hi||0)+Math.abs(sp.cv_li||0)+Math.abs(sp.cv_da||0)+Math.abs(sp.cv_sh||0))>.003||!pcIsId(ps.pc);
+setCurve(sp,ps.pc);
+gl.uniform1f(U.cvOn,cOn?1:0);gl.uniform1f(U.amOn,ps.c?1:0);
+gl.uniform1f(U.hasMask,0);gl.uniform1f(U.asp,W/H);gl.uniform1f(U.faceW,.3);gl.uniform2f(U.res,W,H);
+IDS.forEach(k=>gl.uniform1f(U[k],sp[k]));
+gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+inT=outT;
+});
+const px=new Uint8Array(W*H*4);
+gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,px);
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+gl.deleteTexture(srcT);tmp.forEach(t=>gl.deleteTexture(t));
+gl.viewport(vp[0],vp[1],vp[2],vp[3]);
+gl.activeTexture(gl.TEXTURE0);if(tex)gl.bindTexture(gl.TEXTURE_2D,tex);
+return px;
+}
 async function show(p,cap,tk){
 const bm=await createImageBitmap(p.blob,{imageOrientation:"from-image"});
 if(tk!==undefined&&tk!==tok){bm.close();return;}
@@ -252,7 +299,7 @@ const tc=document.createElement("canvas");tc.width=cw;tc.height=ch;tc.getContext
 wc.width=cw;wc.height=ch;wc.getContext("2d").drawImage(tc,0,0);
 }
 const G=p.glare.auto||p.glare.strokes.length;
-if(G||p.s.skin>0||p.s.teeth>0||p.s.eyes>0){await ensureFaces(p);if(tk!==undefined&&tk!==tok)return;}
+if(G||irLayers(p).some(l=>l.s.skin>0||l.s.teeth>0||l.s.eyes>0||l.s.acne>0||l.s.freck>0)){await ensureFaces(p);if(tk!==undefined&&tk!==tok)return;}
 if(G)applyGlare(p);
 cv.width=wc.width; cv.height=wc.height;
 if(tex)gl.deleteTexture(tex); tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex);

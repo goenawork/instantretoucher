@@ -4,6 +4,7 @@ const FS=`precision highp float;varying vec2 v;uniform sampler2D t;
 uniform sampler2D mk;uniform float hasMask,asp,faceW,skin,keep,teeth,eyes;
 uniform float exposure,contrast,highlights,shadows,whites,blacks,temp,tint,vibrance,sat;
 uniform float fine,clarity,dehaze,vig,vmid,vround,vfeather,vhi,grain,gsize;
+uniform float acne,freck,blsz,blsn;
 uniform vec2 res;
 uniform sampler2D ct;uniform float cvOn;uniform sampler2D am;uniform float amOn;
 uniform float hue_red,hue_orange,hue_yellow,hue_green,hue_aqua,hue_blue,hue_purple,hue_magenta;
@@ -66,6 +67,20 @@ acc+=s*w; ws+=w; pl+=s;
 }
 vec3 sb=acc/ws, lp=pl/24.;
 c=mix(c,clamp(sb+(c-lp)*keep,0.,1.),sm);
+}
+if(max(acne,freck)>.003&&m.r>.02){
+float bR=faceW*(.004+.026*blsz);
+vec3 bm=vec3(0.);
+for(int i=0;i<16;i++){float fi=float(i)+.5,a=fi*2.39996,r=bR*(1.+.9*fi/16.);bm+=texture2D(t,v+vec2(cos(a),sin(a)*asp)*r).rgb;}
+bm/=16.;float bl=dot(bm,LW);
+vec3 ba=vec3(0.);float bw2=0.;
+for(int i=0;i<16;i++){float fi=float(i)+.5,a=fi*2.39996,r=bR*(1.+.9*fi/16.);vec3 s2=texture2D(t,v+vec2(cos(a),sin(a)*asp)*r).rgb;float d=dot(s2,LW)-bl;float w2=exp(-d*d/.0018);ba+=s2*w2;bw2+=w2;}
+vec3 ring=ba/max(bw2,1e-3);
+float bdl=dot(ring,LW)-dot(c,LW), bdr=(c.r-c.g)-(ring.r-ring.g);
+float bth=.012+(1.-blsn)*.06;
+float wAc=smoothstep(bth,bth+.05,bdr)*smoothstep(0.,.03,bdl+bdr*.5)*acne;
+float wFr=smoothstep(bth*1.2,bth*1.2+.05,bdl)*freck*(1.-smoothstep(bth,bth+.05,bdr)*.6);
+c=mix(c,ring,clamp(max(wAc,wFr),0.,1.)*m.r*.95);
 }
 float l0=dot(c,LW);
 float red=c.r-.5*(c.g+c.b);

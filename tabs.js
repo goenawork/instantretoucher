@@ -12,7 +12,7 @@
       icon: ico('<circle cx="12" cy="12" r="4.2"/><path d="M12 7.8a4.2 4.2 0 0 0 0 8.4z" fill="currentColor"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M5.3 18.7L7 17M17 7l1.7-1.7"/>') },
     { id: "crop", name: "Cropping", subs: ["Crop"],
       icon: ico('<path d="M6.5 2.5v13a2 2 0 0 0 2 2h13M2.5 6.5h13a2 2 0 0 1 2 2v13"/>') },
-    { id: "presence", name: "Presence", subs: ["Effects", "Retouch"],
+    { id: "presence", name: "Presence", subs: ["Effects", "Retouch", "Blemish Removal", "Glasses Glare"],
       icon: ico('<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="10.2" r="2.9"/><path d="M6.8 17.4a5.2 4.2 0 0 1 10.4 0"/>') },
     { id: "mask", name: "Masking", subs: ["Selection"],
       icon: ico('<circle cx="10" cy="10" r="6.2" stroke-dasharray="2.6 2.6"/><path d="M13.2 13.2l7.6 2.9-3.4 1.4-1.4 3.4z" fill="currentColor"/>') },
