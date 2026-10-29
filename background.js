@@ -96,25 +96,59 @@ return A;
 
 /* ---------- Komposit ---------- */
 function composite(p){
-if(!p.mask){out.style.display="none";cv.style.display="block";p._fa=p._fk=p._ref=null;p.mst=[];return;}
-const W=cv.width,H=cv.height,mode=$("bgmode").value;
-if(out.width!==W)out.width=W;if(out.height!==H)out.height=H;
-const o=out.getContext("2d");
-o.clearRect(0,0,W,H);
-out.style.background=mode==="transparent"?"repeating-conic-gradient(#2a2a2a 0 25%,#1c1c1c 0 50%) 0 0/20px 20px":"none";
-if(mode==="original")o.drawImage(cv,0,0);
-else{
-if(mode==="color"){o.fillStyle=$("bgcolor").value;o.fillRect(0,0,W,H);}
-else if(mode==="image"&&bgImg){const k=Math.max(W/bgImg.width,H/bgImg.height),w=bgImg.width*k,h=bgImg.height*k;o.drawImage(bgImg,(W-w)/2,(H-h)/2,w,h);}
-const A=alphaCanvas(p,W,H);
-if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
-const c=tcv.getContext("2d");c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(cv,0,0);
-c.globalCompositeOperation="destination-in";c.drawImage(A,0,0);c.globalCompositeOperation="source-over";
-o.drawImage(tcv,0,0);
+  if(!p.mask){out.style.display="none";cv.style.display="block";p._fa=p._fk=p._ref=null;p.mst=[];return;}
+  const W=cv.width, H=cv.height;
+  
+  // PERBAIKAN: Baca dari data spesifik foto (p.bgmode), BUKAN dari DOM HTML secara global
+  const mode = p.bgmode || "original"; 
+  
+  if(out.width!==W)out.width=W;if(out.height!==H)out.height=H;
+  const o=out.getContext("2d");
+  o.clearRect(0,0,W,H);
+  out.style.background=mode==="transparent"?"repeating-conic-gradient(#2a2a2a 0 25%,#1c1c1c 0 50%) 0 0/20px 20px":"none";
+  
+  if(mode==="original") o.drawImage(cv,0,0);
+  else{
+    if(mode==="color"){
+      o.fillStyle = p.bgcolor || "#ffffff"; // Baca warna per-foto
+      o.fillRect(0,0,W,H);
+    }
+    else if(mode==="image" && p.bgimg){
+      const k=Math.max(W/p.bgimg.width,H/p.bgimg.height),w=p.bgimg.width*k,h=p.bgimg.height*k;
+      o.drawImage(p.bgimg,(W-w)/2,(H-h)/2,w,h);
+    }
+    const A=alphaCanvas(p,W,H);
+    if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
+    const c=tcv.getContext("2d",{willReadFrequently:true});
+    c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(cv,0,0);
+    const aCtx = A.getContext("2d",{willReadFrequently:true});
+    if(typeof decontaminateSpill === "function") decontaminateSpill(c, aCtx, W, H);
+    c.globalCompositeOperation="destination-in";c.drawImage(A,0,0);c.globalCompositeOperation="source-over";
+    o.drawImage(tcv,0,0);
+  }
+  cv.style.display="none";out.style.display="block";
+  if(p!==cur){p._fa=p._fk=p._ref=null;}
 }
-cv.style.display="none";out.style.display="block";
-if(p!==cur){p._fa=p._fk=p._ref=null;}   // hemat memori: cache hanya untuk foto yang sedang dibuka
-}
+
+// PERBAIKAN PADA EVENT LISTENER: Simpan pengaturan ke objek foto yang sedang aktif (cur)
+["bgmode","bgcolor"].forEach(id=>$(id).addEventListener("input",(e)=>{
+  if (cur) {
+    if (id === "bgmode") cur.bgmode = e.target.value;
+    if (id === "bgcolor") cur.bgcolor = e.target.value;
+  }
+  $("o_f").textContent=$("feather").value;
+  sched();
+}));
+
+$("bgimg").addEventListener("change",e=>{
+  const f=e.target.files[0];if(!f)return;const im=new Image();
+  im.onload=()=>{
+    if (cur) { cur.bgimg = im; cur.bgmode = "image"; }
+    $("bgmode").value="image";
+    draw();
+  };
+  im.src=URL.createObjectURL(f);
+});
 
 /* ---------- Panel Latar: kontrol tambahan ---------- */
 let pend=false;
