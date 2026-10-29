@@ -100,8 +100,16 @@ function composite(p){
   if(!p.mask){out.style.display="none";cv.style.display="block";p._fa=p._fk=p._ref=null;p.mst=[];return;}
   const W=cv.width, H=cv.height;
   
-  // Membaca warna/mode dari objek foto, bukan dari DOM
+  // Membaca warna/mode dari objek foto
   const mode = p.bgmode || "original"; 
+
+  // ----- TAMBAHAN BARU: SINKRONISASI UI OTOMATIS -----
+  // Jika foto yang sedang di-render adalah foto yang sedang dibuka (cur), update panel kanan!
+  if (p === cur) {
+    if ($("bgmode")) $("bgmode").value = mode;
+    if ($("bgcolor")) $("bgcolor").value = p.bgcolor || "#ffffff";
+  }
+  // ---------------------------------------------------
   
   if(out.width!==W)out.width=W;if(out.height!==H)out.height=H;
   const o=out.getContext("2d");
