@@ -17,12 +17,51 @@
     if (L.some((l, i) => irLayerActive(l) && (i === 0 || p.areas))) return true;
     return !!(p.crop || p.mask || (p.glare && p.glare.auto) || p.rot);
   }
-  function sigT(p) {
-    const L = irLayers(p), bgi = window.irBgImg && window.irBgImg();
+function sigT(p) {
+    const L = irLayers(p);
     if (p.mask && !p.mask._tid) p.mask._tid = ++IDC;
-    return JSON.stringify([L.map(l => [l.id, l.s, l.pc || null]), p.rot, p.crop || null, p.mask ? p.mask._tid : 0,
+    // PERBAIKAN: Baca bgmode, bgcolor, dan bgimg dari objek foto (p), bukan dari elemen HTML global
+    return JSON.stringify([
+      L.map(l => [l.id, l.s, l.pc || null]), p.rot, p.crop || null, p.mask ? p.mask._tid : 0,
       (p.mst || []).length, (p.mst || []).reduce((a, s) => a + s.pts.length, 0), p.areas ? (p._av || 1) : 0,
-      (p.ast || []).length, p.glare && [p.glare.auto, p.glare.thr], $("bgmode").value, $("bgcolor").value, bgi ? bgi.src : 0]);
+      (p.ast || []).length, p.glare && [p.glare.auto, p.glare.thr], 
+      p.bgmode || "original", p.bgcolor || "#ffffff", p.bgimg ? p.bgimg.src : 0
+    ]);
+  }
+
+  async function make(p) {
+    const { c } = await srcOf(p), W = c.width, H = c.height;
+    const px = irRenderSmall(p, c, W, H);
+    if (!px) return;
+    const out = document.createElement("canvas"); out.width = W; out.height = H;
+    const og = out.getContext("2d"), id = og.createImageData(W, H), row = W * 4;
+    for (let y = 0; y < H; y++) id.data.set(px.subarray((H - 1 - y) * row, (H - y) * row), y * row);
+    og.putImageData(id, 0, 0);
+    let res = out;
+    
+    // PERBAIKAN: Ambil mode dan properti latar belakang dari objek foto (p)
+    const mode = p.bgmode || "original";
+    if (p.mask && mode !== "original") {
+      res = document.createElement("canvas"); res.width = W; res.height = H;
+      const fg = res.getContext("2d");
+      
+      if (mode === "color") { 
+        fg.fillStyle = p.bgcolor || "#ffffff"; 
+        fg.fillRect(0, 0, W, H); 
+      }
+      else if (mode === "image" && p.bgimg) { 
+        const k = Math.max(W / p.bgimg.width, H / p.bgimg.height), w = p.bgimg.width * k, h = p.bgimg.height * k; 
+        fg.drawImage(p.bgimg, (W - w) / 2, (H - h) / 2, w, h); 
+      }
+      else { 
+        fg.fillStyle = "#2a2a2a"; fg.fillRect(0, 0, W, H); fg.fillStyle = "#1c1c1c"; 
+        for (let y = 0; y < H; y += 8) for (let x = (y / 8 % 2) * 8; x < W; x += 16) fg.fillRect(x, y, 8, 8); 
+      }
+      const t = document.createElement("canvas"); t.width = W; t.height = H;
+      const tg = t.getContext("2d"); tg.drawImage(out, 0, 0); tg.globalCompositeOperation = "destination-in"; tg.drawImage(p.mask, 0, 0, W, H);
+      fg.drawImage(t, 0, 0);
+    }
+    p.thumbE = res.toDataURL("image/jpeg", .78);
   }
 
   /* Sumber kecil: foto yang sudah diputar dan di-crop, sisi terpanjang TW. Disimpan sampai rotasi/crop berubah. */
