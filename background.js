@@ -167,7 +167,15 @@ $("bgopts").insertAdjacentHTML("beforeend",`
 const el=$(id),key={bsharp:"sharp",bshift:"shift",bcont:"cont"}[id];paint(el);
 el.addEventListener("input",()=>{BG[key]=+el.value;$("o_"+id).textContent=Math.round(+el.value*100);paint(el);sched();});
 });
-["bgmode","bgcolor","feather"].forEach(id=>$(id).addEventListener("input",()=>{$("o_f").textContent=$("feather").value;sched();}));
+["bgmode","bgcolor"].forEach(id=>$(id).addEventListener("input",(e)=>{
+  if (cur) {
+    if (id === "bgmode") cur.bgmode = e.target.value;
+    if (id === "bgcolor") cur.bgcolor = e.target.value;
+  }
+  $("o_f").textContent=$("feather").value;
+  sched();
+}));
+$("feather").addEventListener("input",()=>{$("o_f").textContent=$("feather").value;sched();});
 $("bgimg").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{bgImg=im;$("bgmode").value="image";draw();};im.src=URL.createObjectURL(f);});
 $("bsize").addEventListener("input",()=>{$("o_bsize").textContent=$("bsize").value;});
 
