@@ -34,7 +34,8 @@
       areas: L.slice(1).filter(l => cur.areas && irLayerActive(l)).map(l => ({ id: l.id, s: { ...l.s }, pc: clonePc(l.pc) })),
       glare: { auto: !!cur.glare.auto, thr: cur.glare.thr },
       crop: cur.crop ? { ...cur.crop } : null,
-      hasMask: !!cur.mask
+      hasMask: !!cur.mask,
+      bg: { mode: cur.bgmode, color: cur.bgcolor, img: cur.bgimg }
     };
     saveClip();
     const parts = ["adjustments"];
@@ -65,7 +66,7 @@
   dlg.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>Paste settings</h3><div class="src" id="pa_src"></div>
 <label class="o"><input type="checkbox" id="pa_adj" checked><span>Adjustments<small>Light, Color, HSL, Selective Color, Curves, Effects, Retouch, Blemish Removal, Glasses Glare</small></span></label>
 <label class="o" id="pa_arl"><input type="checkbox" id="pa_are" checked><span>Area adjustments<small id="pa_ars">Face, Skin, Hair, ... Areas are detected automatically on each photo first.</small></span></label>
-<label class="o" id="pa_bgl"><input type="checkbox" id="pa_bg" checked><span>Background<small>Select Subject runs automatically on each photo. Background type, color, and image are already shared.</small></span></label>
+<label class="o" id="pa_bgl"><input type="checkbox" id="pa_bg" checked><span>Background<small>Select Subject runs automatically on each photo. Background type, color, and image will be pasted.</small></span></label>
 <label class="o" id="pa_crl"><input type="checkbox" id="pa_cr"><span>Crop<small>Same crop box position, relative to each photo.</small></span></label>
 <div class="sep"></div>
 <label class="o"><input type="radio" name="pa_to" value="cur" checked><span>Current photo</span></label>
