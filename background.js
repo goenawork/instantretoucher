@@ -94,12 +94,13 @@ p._fk=key;
 return A;
 }
 
+
 /* ---------- Komposit ---------- */
 function composite(p){
   if(!p.mask){out.style.display="none";cv.style.display="block";p._fa=p._fk=p._ref=null;p.mst=[];return;}
   const W=cv.width, H=cv.height;
   
-  // PERBAIKAN: Baca dari data spesifik foto (p.bgmode), BUKAN dari DOM HTML secara global
+  // Membaca warna/mode dari objek foto, bukan dari DOM
   const mode = p.bgmode || "original"; 
   
   if(out.width!==W)out.width=W;if(out.height!==H)out.height=H;
@@ -110,7 +111,7 @@ function composite(p){
   if(mode==="original") o.drawImage(cv,0,0);
   else{
     if(mode==="color"){
-      o.fillStyle = p.bgcolor || "#ffffff"; // Baca warna per-foto
+      o.fillStyle = p.bgcolor || "#ffffff";
       o.fillRect(0,0,W,H);
     }
     else if(mode==="image" && p.bgimg){
@@ -119,10 +120,8 @@ function composite(p){
     }
     const A=alphaCanvas(p,W,H);
     if(tcv.width!==W)tcv.width=W;if(tcv.height!==H)tcv.height=H;
-    const c=tcv.getContext("2d",{willReadFrequently:true});
+    const c=tcv.getContext("2d");
     c.globalCompositeOperation="source-over";c.clearRect(0,0,W,H);c.drawImage(cv,0,0);
-    const aCtx = A.getContext("2d",{willReadFrequently:true});
-    if(typeof decontaminateSpill === "function") decontaminateSpill(c, aCtx, W, H);
     c.globalCompositeOperation="destination-in";c.drawImage(A,0,0);c.globalCompositeOperation="source-over";
     o.drawImage(tcv,0,0);
   }
