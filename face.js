@@ -103,10 +103,7 @@ function applyGlare(p){
   const mark=(i,t)=>{
       const r=D[i*4], g=D[i*4+1], b=D[i*4+2];
       const mx=Math.max(r,g,b), mn=Math.min(r,g,b), luma=(.2126*r+.7152*g+.0722*b)/255;
-
-      // PERBAIKAN 1: Kembalikan threshold agar kulit hidung tidak ikut terdeteksi
       if(luma>t && (mx-mn)<80) { M[i]=1; return; }
-
       if(mx>80 && (mx-mn)/mx>0.15){
         const d=mx-mn;let h=mx===r?((g-b)/d+6)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;
         if(h>50 && h<320) C[i]=1;
@@ -115,7 +112,6 @@ function applyGlare(p){
 
   if(E.length)for(let y=0;y<bh;y++)for(let x=0;x<bw;x++){
     const wx=x0+x,wy=y0+y;
-    // Area elips sedikit dikecilkan agar tidak menabrak tulang hidung
     if(E.some(e=>((wx-e.cx)/e.rx)**2+((wy-e.cy)/e.ry)**2<=1)) mark(y*bw+x,thr);
   }
 
@@ -136,26 +132,28 @@ function applyGlare(p){
     if(C[i])p._gcount.c++;
   }
 
-  // 2) Hapus Kilau Putih (PERBAIKAN 2: Kembalikan blending inpainting yang aman)
+  // 2) Hapus Kilau Putih (Perbaikan dengan teknik Multiply Blending)
   if(M.some(v=>v)){
     const MD=dilate(M,bw,bh,Math.max(2,Math.round(W*.002)));
     const F=pushPull(D,MD,bw,bh);
 
-    let sum=0,n=0;
-    for(let y=0;y<bh;y+=2)for(let x=0;x<bw-1;x+=2){const i=y*bw+x;if(!MD[i]&&!MD[i+1]){sum+=Math.abs(D[i*4+1]-D[(i+1)*4+1]);n++;}}
-    const sg=n?sum/n*.8:0,nz=()=>(Math.random()+Math.random()-1)*sg*1.7;
-
     for(let i=0;i<bw*bh;i++){
         if(M[i])p._gcount.w++;
         if(MD[i]){
-            const z=nz();
-            // Alpha blending: Transisi halus 50% di tepi (MD), dan 100% menimpa di area kilau tebal (M)
-            const weight = M[i] ? 1 : 0.5; 
-            for(let ch=0;ch<3;ch++) {
-                const inpVal = Math.max(0,Math.min(255,F[i*3+ch]+z));
-                D[i*4+ch] = Math.round(D[i*4+ch] * (1-weight) + inpVal * weight);
-            }
-            D[i*4+3]=255;
+            const origR = D[i*4], origG = D[i*4+1], origB = D[i*4+2];
+            const ir = F[i*3], ig = F[i*3+1], ib = F[i*3+2];
+            
+            // Rumus Multiply: Menggelapkan piksel asli menggunakan warna inpainting
+            const multR = (origR * ir) / 255;
+            const multG = (origG * ig) / 255;
+            const multB = (origB * ib) / 255;
+            
+            // Gunakan bobot pencampuran: 85% di tengah kilau, 40% di tepian
+            const weight = M[i] ? 0.85 : 0.40; 
+            
+            D[i*4]   = Math.round(origR * (1-weight) + multR * weight);
+            D[i*4+1] = Math.round(origG * (1-weight) + multG * weight);
+            D[i*4+2] = Math.round(origB * (1-weight) + multB * weight);
         }
     }
   }
