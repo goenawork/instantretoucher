@@ -40,7 +40,8 @@
   /* RGB hasil decode -> blob JPEG kualitas tinggi */
   function toBlob(d, meta) {
     const src = d.data;
-    let w = d.width || (meta && meta.width), h = d.height || (meta && meta.height);
+    const M = meta || {};
+    let w = d.width || d.w || M.width || M.iwidth || M.output_width, h = d.height || d.h || M.height || M.iheight || M.output_height;
     if (!w || !h) throw new Error("ukuran hasil decode tidak diketahui");
     let ch = Math.round(src.length / (w * h));
     if (ch !== 3 && ch !== 4) ch = 3;
@@ -63,7 +64,8 @@
       const d = await raw.imageData();
       return await toBlob(d, meta);
     } finally {
-      try { if (raw.terminate) raw.terminate(); else if (raw.close) raw.close(); } catch (e) {}
+      // library ini menyimpan Worker di raw.worker dan tidak menyediakan tombol tutup: hentikan agar memori WASM dibebaskan
+      try { if (raw.worker && raw.worker.terminate) raw.worker.terminate(); else if (raw.terminate) raw.terminate(); else if (raw.close) raw.close(); } catch (e) {}
     }
   }
 
@@ -84,6 +86,7 @@
             out.push(new File([blob], f.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }));
             ok++; continue;
           } catch (e) {
+            console.error("Decode RAW gagal untuk " + f.name, e);
             if (state !== "ready") state = "missing";
             failed.push(f.name + ": " + (e && e.message || e));
           }
